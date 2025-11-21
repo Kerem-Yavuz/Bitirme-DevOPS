@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-fabric-cli
+  namespace: fabric
+spec:
+  nodeSelector:
+    storage: longhorn
+  containers:
+    - name: cli
+      image: hyperledger/fabric-ca:1.5 # <-- fabric-ca-client için bu imaj
+      command: ["sleep", "infinity"]
+      volumeMounts:
+        - name: crypto-data
+          mountPath: /crypto-config
+  volumes:
+    - name: crypto-data
+      persistentVolumeClaim:
+        claimName: pvc-fabric-crypto-lh

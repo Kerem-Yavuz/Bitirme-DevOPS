@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-configtx
+  namespace: fabric
+data:
+  configtx.yaml: |
+    Organizations:
+      # ---------------------
+      # 1. Orderer Organizasyonu
+      # ---------------------
+      - &OrdererOrg
+        Name: OrdererOrg
+        ID: OrdererOrgMSP
+        # MSPDir: PVC'de oluşturduğumuz kimliklerin yolu
+        MSPDir: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/msp
+        Policies:
+          Readers:
+            Type: Signature
+            Rule: "OR('OrdererOrgMSP.member')"
+          Writers:
+            Type: Signature
+            Rule: "OR('OrdererOrgMSP.member')"
+          Admins:
+            Type: Signature
+            Rule: "OR('OrdererOrgMSP.admin')"
+        OrdererEndpoints:
+          # Bu, Orderer pod'unu kurduğumuzda kullanacağımız servis adı olacak
+          - "svc-orderer.fabric.svc.cluster.local:7050" 
+
+      # ---------------------
+      # 2. Admin Organizasyonu (Peer)
+      # ---------------------
+      - &AdminOrg
+        Name: AdminOrg
+        ID: AdminOrgMSP
+        # MSPDir: PVC'de oluşturduğumuz kimliklerin yolu
+        MSPDir: /crypto-config/organizations/peerOrganizations/AdminOrg.com/msp
+        Policies:
+          Readers:
+            Type: Signature
+            Rule: "OR('AdminOrgMSP.admin', 'AdminOrgMSP.peer', 'AdminOrgMSP.client')"
+          Writers:
+            Type: Signature
+            Rule: "OR('AdminOrgMSP.admin', 'AdminOrgMSP.client')"
+          Admins:
+            Type: Signature
+            Rule: "OR('AdminOrgMSP.admin')"
+        AnchorPeers:
+          # Bu, AdminPeer'i kurduğumuzda kullanacağımız servis adı olacak
+          - Host: svc-admin-peer.fabric.svc.cluster.local
+            Port: 7051
+
+      # ---------------------
+      # 3. Student Organizasyonu (Peer)
+      # ---------------------
+      - &StudentOrg
+        Name: StudentOrg
+        ID: StudentOrgMSP
+        # MSPDir: PVC'de oluşturduğumuz kimliklerin yolu
+        MSPDir: /crypto-config/organizations/peerOrganizations/StudentOrg.com/msp
+        Policies:
+          Readers:
+            Type: Signature
+            Rule: "OR('StudentOrgMSP.admin', 'StudentOrgMSP.peer', 'StudentOrgMSP.client')"
+          Writers:
+            Type: Signature
+            Rule: "OR('StudentOrgMSP.admin', 'StudentOrgMSP.client')"
+          Admins:
+            Type: Signature
+            Rule: "OR('StudentOrgMSP.admin')"
+        AnchorPeers:
+          # Bu, StudentPeer'i kurduğumuzda kullanacağımız servis adı olacak
+          - Host: svc-student-peer.fabric.svc.cluster.local
+            Port: 7051
+
+    # ---------------------------------
+    # KANAL YAPILANDIRMASI (Profiles)
+    # ---------------------------------
+    Capabilities:
+      Channel: &ChannelCapabilities
+        V2_0: true
+      Orderer: &OrdererCapabilities
+        V2_0: true
+      Application: &ApplicationCapabilities
+        V2_0: true
+
+    Application: &ApplicationDefaults
+      Organizations:
+      Policies:
+        Readers:
+          Type: ImplicitMeta
+          Rule: "ANY Readers"
+        Writers:
+          Type: ImplicitMeta
+          Rule: "ANY Writers"
+        Admins:
+          Type: ImplicitMeta
+          Rule: "MAJORITY Admins"
+      Capabilities:
+        <<: *ApplicationCapabilities
+
+    Orderer: &OrdererDefaults
+      OrdererType: etcdraft
+      EtcdRaft:
+        Consenters:
+          # Orderer servisimizin adresi
+          - Host: svc-orderer.fabric.svc.cluster.local
+            Port: 7050
+            ClientTLSCert: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/msp/tlscacerts/tls-svc-ca-orderer-org-7054.pem
+            ServerTLSCert: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/msp/tlscacerts/tls-svc-ca-orderer-org-7054.pem
+      Addresses:
+        - svc-orderer.fabric.svc.cluster.local:7050
+      BatchTimeout: 2s
+      BatchSize:
+        MaxMessageCount: 10
+        AbsoluteMaxBytes: 99 MB
+        PreferredMaxBytes: 512 KB
+      Organizations:
+      Policies:
+        Readers:
+          Type: ImplicitMeta
+          Rule: "ANY Readers"
+        Writers:
+          Type: ImplicitMeta
+          Rule: "ANY Writers"
+        Admins:
+          Type: ImplicitMeta
+          Rule: "MAJORITY Admins"
+        BlockValidation:
+          Type: ImplicitMeta
+          Rule: "ANY Writers"
+      Capabilities:
+        <<: *OrdererCapabilities
+
+    Channel: &ChannelDefaults
+      Policies:
+        Readers:
+          Type: ImplicitMeta
+          Rule: "ANY Readers"
+        Writers:
+          Type: ImplicitMeta
+          Rule: "ANY Writers"
+        Admins:
+          Type: ImplicitMeta
+          Rule: "MAJORITY Admins"
+      Capabilities:
+        <<: *ChannelCapabilities
+
+    # ---------------------------------
+    # AĞ PROFİLLERİ (ÇALIŞTIRACAĞIMIZ KOMUTLAR)
+    # ---------------------------------
+    Profiles:
+      # 1. GENESIS BLOK PROFİLİ
+      OrdererGenesis:
+        <<: *ChannelDefaults
+        Orderer:
+          <<: *OrdererDefaults
+          Organizations:
+            - *OrdererOrg
+          Capabilities:
+            <<: *OrdererCapabilities
+        Consortiums:
+          # Kanallara katılabilecek organizasyonlar
+          SampleConsortium:
+            Organizations:
+              - *AdminOrg
+              - *StudentOrg
+      
+      # 2. KANAL PROFİLİ (Kanalı oluştururken kullanacağız)
+      MyChannelProfile:
+        <<: *ChannelDefaults
+        Consortium: SampleConsortium
+        Application:
+          <<: *ApplicationDefaults
+          Organizations:
+            - *AdminOrg
+            - *StudentOrg
+          Capabilities:
+            <<: *ApplicationCapabilities

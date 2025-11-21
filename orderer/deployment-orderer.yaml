@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploy-orderer
+  namespace: fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orderer
+  template:
+    metadata:
+      labels:
+        app: orderer
+    spec:
+      nodeSelector:
+        storage: longhorn
+      containers:
+        - name: orderer
+          image: hyperledger/fabric-orderer:2.5
+          # orderer.yaml'ı nerede bulacağını söylüyoruz
+          env:
+            - name: FABRIC_LOGGING_SPEC
+              value: INFO
+            - name: FABRIC_CFG_PATH
+              value: /config
+          command: ["orderer"] # Varsayılan komut (start)
+          ports:
+            - containerPort: 7050 # Ana port
+            - containerPort: 9443 # Operasyon portu
+          volumeMounts:
+            # 1. orderer.yaml'ı içeren ConfigMap
+            - name: config-volume
+              mountPath: /config
+            # 2. Tüm kripto materyallerini içeren PVC
+            - name: crypto-volume
+              mountPath: /crypto-config
+              readOnly: true # Orderer'ın kimlikleri değiştirmesini engelle
+      volumes:
+        - name: config-volume
+          configMap:
+            name: configmap-orderer
+        - name: crypto-volume
+          persistentVolumeClaim:
+            claimName: pvc-fabric-crypto-lh

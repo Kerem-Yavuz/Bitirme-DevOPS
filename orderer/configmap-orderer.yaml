@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-orderer
+  namespace: fabric
+data:
+  orderer.yaml: |
+    General:
+      ListenAddress: 0.0.0.0
+      ListenPort: 7050
+      GenesisFile: /crypto-config/channel-artifacts/genesis.block
+      LocalMSPDir: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/orderers/orderer.OrdererOrg.com/msp
+      LocalMSPID: OrdererOrgMSP
+      
+      # TLS, General'in bir alt basamağıdır (Indentasyona dikkat!)
+      TLS:
+        Enabled: true
+        Certificate: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/orderers/orderer.OrdererOrg.com/tls/server.crt
+        PrivateKey: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/orderers/orderer.OrdererOrg.com/tls/server.key
+        RootCAs:
+          - /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/orderers/orderer.OrdererOrg.com/tls/ca.crt
+        ClientAuthRequired: false
+    
+    Operations:
+      ListenAddress: 0.0.0.0:9443

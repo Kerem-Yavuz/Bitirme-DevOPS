@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-fabric-cli
+  namespace: fabric
+spec:
+  nodeSelector:
+    storage: longhorn
+  containers:
+    - name: cli
+      # ARAÇ DEĞİŞİMİ: fabric-tools imajı
+      image: hyperledger/fabric-tools:2.5
+      command: ["sleep", "infinity"]
+      env:
+        # configtxgen'e config dosyasının nerede olduğunu söylüyoruz
+        - name: FABRIC_CFG_PATH
+          value: /configtx
+      volumeMounts:
+        # 1. Kripto kasası (PVC)
+        - name: crypto-data
+          mountPath: /crypto-config
+        # 2. configtx.yaml'ı içeren ConfigMap
+        - name: configtx-data
+          mountPath: /configtx
+  volumes:
+    - name: crypto-data
+      persistentVolumeClaim:
+        claimName: pvc-fabric-crypto-lh
+    - name: configtx-data
+      configMap:
+        name: configmap-configtx

@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploy-ca-orderer-org
+  namespace: fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ca-orderer-org
+  template:
+    metadata:
+      labels:
+        app: ca-orderer-org
+    spec:
+      nodeSelector:
+        storage: longhorn
+      containers:
+        - name: ca-orderer-org
+          image: hyperledger/fabric-ca:1.5
+          command: ["fabric-ca-server"]
+          args:
+            - "start"
+            - "-b"
+            - "admin:adminpw"
+            - "--config"
+            - "/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml"
+          ports:
+            - containerPort: 7054
+          volumeMounts:
+            - name: data-volume
+              mountPath: /etc/hyperledger/fabric-ca-server
+            - name: config-volume
+              mountPath: /etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml
+              subPath: fabric-ca-server-config.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: configmap-ca-orderer-org
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: pvc-ca-orderer-org-lh
