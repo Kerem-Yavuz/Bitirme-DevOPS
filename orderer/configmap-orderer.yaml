@@ -5,6 +5,8 @@ metadata:
   namespace: fabric
 data:
   orderer.yaml: |
+    FileLedger:
+      Location: /crypto-config/orderer-data
     General:
       ListenAddress: 0.0.0.0
       ListenPort: 7050

@@ -16,4 +16,4 @@ spec:
   volumes:
     - name: crypto-data
       persistentVolumeClaim:
-        claimName: pvc-fabric-crypto-lh
+        claimName: pvc-crypto-rwx

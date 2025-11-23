@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploy-admin-peer
+  namespace: fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-peer
+  template:
+    metadata:
+      labels:
+        app: admin-peer
+    spec:
+      nodeSelector:
+        storage: longhorn
+      containers:
+        - name: peer
+          image: hyperledger/fabric-peer:2.5
+          env:
+            - name: FABRIC_LOGGING_SPEC
+              value: INFO
+            - name: CORE_PEER_ID
+              value: peer0.AdminOrg.com
+            - name: CORE_PEER_ADDRESS
+              value: svc-admin-peer:7051
+            - name: CORE_PEER_LISTENADDRESS
+              value: 0.0.0.0:7051
+            - name: CORE_PEER_CHAINCODEADDRESS
+              value: svc-admin-peer:7052
+            - name: CORE_PEER_CHAINCODELISTENADDRESS
+              value: 0.0.0.0:7052
+            - name: CORE_PEER_GOSSIP_BOOTSTRAP
+              value: svc-admin-peer:7051
+            - name: CORE_PEER_GOSSIP_EXTERNALENDPOINT
+              value: svc-admin-peer:7051
+            - name: CORE_PEER_LOCALMSPID
+              value: AdminOrgMSP
+            - name: CORE_PEER_MSPCONFIGPATH
+              value: /crypto-config/organizations/peerOrganizations/AdminOrg.com/peers/peer0.AdminOrg.com/msp
+            # --- TLS Ayarları ---
+            - name: CORE_PEER_TLS_ENABLED
+              value: "true"
+            - name: CORE_PEER_TLS_CERT_FILE
+              value: /crypto-config/organizations/peerOrganizations/AdminOrg.com/peers/peer0.AdminOrg.com/tls/server.crt
+            - name: CORE_PEER_TLS_KEY_FILE
+              value: /crypto-config/organizations/peerOrganizations/AdminOrg.com/peers/peer0.AdminOrg.com/tls/server.key
+            - name: CORE_PEER_TLS_ROOTCERT_FILE
+              value: /crypto-config/organizations/peerOrganizations/AdminOrg.com/peers/peer0.AdminOrg.com/tls/ca.crt
+          ports:
+            - containerPort: 7051
+            - containerPort: 7052
+          volumeMounts:
+            - name: peer-storage
+              mountPath: /crypto-config
+      volumes:
+        - name: peer-storage
+          persistentVolumeClaim:
+            claimName: pvc-crypto-rwx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-admin-peer
+  namespace: fabric
+spec:
+  type: ClusterIP
+  selector:
+    app: admin-peer
+  ports:
+    - name: grpc
+      port: 7051
+      targetPort: 7051
+    - name: chaincode
+      port: 7052
+      targetPort: 7052

@@ -35,11 +35,11 @@ spec:
             # 2. Tüm kripto materyallerini içeren PVC
             - name: crypto-volume
               mountPath: /crypto-config
-              readOnly: true # Orderer'ın kimlikleri değiştirmesini engelle
+              readOnly: false
       volumes:
         - name: config-volume
           configMap:
             name: configmap-orderer
         - name: crypto-volume
           persistentVolumeClaim:
-            claimName: pvc-fabric-crypto-lh
+            claimName: pvc-crypto-rwx

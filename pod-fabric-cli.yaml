@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: pod-fabric-cli
+  name: pod-fabrictools-cli
   namespace: fabric
 spec:
   nodeSelector:
@@ -25,7 +25,7 @@ spec:
   volumes:
     - name: crypto-data
       persistentVolumeClaim:
-        claimName: pvc-fabric-crypto-lh
+        claimName: pvc-crypto-rwx
     - name: configtx-data
       configMap:
         name: configmap-configtx

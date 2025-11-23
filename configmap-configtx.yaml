@@ -107,8 +107,8 @@ data:
           # Orderer servisimizin adresi
           - Host: svc-orderer.fabric.svc.cluster.local
             Port: 7050
-            ClientTLSCert: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/msp/tlscacerts/tls-svc-ca-orderer-org-7054.pem
-            ServerTLSCert: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/msp/tlscacerts/tls-svc-ca-orderer-org-7054.pem
+            ClientTLSCert: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/orderers/orderer.OrdererOrg.com/tls/server.crt
+            ServerTLSCert: /crypto-config/organizations/ordererOrganizations/OrdererOrg.com/orderers/orderer.OrdererOrg.com/tls/server.crt
       Addresses:
         - svc-orderer.fabric.svc.cluster.local:7050
       BatchTimeout: 2s
