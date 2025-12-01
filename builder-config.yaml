@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: external-builder-scripts
+  namespace: fabric
+data:
+  # 1. DETECT: Hiçbir kontrol yapma, her şeyi kabul et!
+  detect: |
+    #!/bin/sh
+    # Gelen paket ne olursa olsun "Ben hallederim" de.
+    exit 0
+
+  # 2. BUILD: connection.json dosyasını dışarı çıkar
+  build: |
+    #!/bin/sh
+    SOURCE=$1
+    OUTPUT=$2
+    # code.tar.gz var mı diye bakmadan direkt çıkarmayı dene
+    if [ -f "$SOURCE/code.tar.gz" ]; then
+        tar -xf "$SOURCE/code.tar.gz" -C "$OUTPUT"
+    else
+        # Eğer yapı farklıysa diye metadata ile aynı yere de bak
+        cp $SOURCE/connection.json $OUTPUT/connection.json
+    fi
+    exit 0
+
+  # 3. RELEASE: Kopyala
+  release: |
+    #!/bin/sh
+    BLD="$1"
+    REL="$2"
+    cp $BLD/connection.json $REL/connection.json
+    exit 0

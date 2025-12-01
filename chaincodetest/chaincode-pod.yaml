@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chaincode-source
+  namespace: fabric
+data:
+  package.json: |
+    {
+      "name": "basic-asset-transfer",
+      "version": "1.0.0",
+      "description": "No-Build Chaincode",
+      "main": "index.js",
+      "engines": {
+        "node": ">=12",
+        "npm": ">=5"
+      },
+      "dependencies": {
+        "fabric-contract-api": "^2.4.0",
+        "fabric-shim": "^2.4.0"
+      }
+    }
+  index.js: |
+    'use strict';
+    const { Contract } = require('fabric-contract-api');
+
+    class AssetTransfer extends Contract {
+        async CreateAsset(ctx, id, color, owner) {
+            const asset = {
+                ID: id,
+                Color: color,
+                Owner: owner,
+            };
+            await ctx.stub.putState(id, Buffer.from(JSON.stringify(asset)));
+            return JSON.stringify(asset);
+        }
+
+        async ReadAsset(ctx, id) {
+            const assetJSON = await ctx.stub.getState(id);
+            if (!assetJSON || assetJSON.length === 0) {
+                throw new Error(`Asset ${id} does not exist`);
+            }
+            return assetJSON.toString();
+        }
+    }
+    module.exports.AssetTransfer = AssetTransfer;
+    module.exports.contracts = [AssetTransfer];
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chaincode-asset
+  namespace: fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chaincode-asset
+  template:
+    metadata:
+      labels:
+        app: chaincode-asset
+    spec:
+      containers:
+        - name: chaincode
+          image: node:18-alpine
+          workingDir: /usr/src/app
+          # Kütüphaneleri kur ve başlat
+          command: ["/bin/sh", "-c"]
+          args: 
+            - npm install && npm start -- --peer.address 0.0.0.0:9999
+          env:
+            # --- SENİN ALDIĞIN ID BURADA ---
+            - name: CHAINCODE_CCID
+              value: "basic_1.0:a8077c77ac402614728e3f700e5a5b553bbcdaae0f4fda5310b4e5ae9f8b9b8a"
+            # -------------------------------
+            - name: CHAINCODE_ADDRESS
+              value: "0.0.0.0:9999"
+          ports:
+            - containerPort: 9999
+          volumeMounts:
+            - name: code-volume
+              mountPath: /usr/src/app
+      volumes:
+        - name: code-volume
+          configMap:
+            name: chaincode-source
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chaincode-asset
+  namespace: fabric
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9999
+      targetPort: 9999
+  selector:
+    app: chaincode-asset
