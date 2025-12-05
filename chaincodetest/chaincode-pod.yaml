@@ -14,6 +14,9 @@ data:
         "node": ">=12",
         "npm": ">=5"
       },
+      "scripts": {
+        "start": "fabric-chaincode-node server --chaincode-address=$CHAINCODE_ADDRESS --chaincode-id=$CHAINCODE_CCID"
+      },
       "dependencies": {
         "fabric-contract-api": "^2.4.0",
         "fabric-shim": "^2.4.0"
@@ -65,22 +68,22 @@ spec:
         - name: chaincode
           image: node:18-alpine
           workingDir: /usr/src/app
-          # Kütüphaneleri kur ve başlat
+          # Dosyaları kopyala -> Paketleri kur -> Başlat
           command: ["/bin/sh", "-c"]
           args: 
-            - npm install && npm start -- --peer.address 0.0.0.0:9999
+            - cp /tmp/code/* /usr/src/app/ && npm install && npm start
           env:
-            # --- SENİN ALDIĞIN ID BURADA ---
+            # --- BURAYA GÜNCEL PACKAGE ID GELECEK ---
             - name: CHAINCODE_CCID
-              value: "basic_1.0:a8077c77ac402614728e3f700e5a5b553bbcdaae0f4fda5310b4e5ae9f8b9b8a"
-            # -------------------------------
+              value: "basic_1.0:d6783996ca25ad54cfb6b9d7b1c017bd31c37aed7933b4b3aae96d859781675e"
+            # ----------------------------------------
             - name: CHAINCODE_ADDRESS
               value: "0.0.0.0:9999"
           ports:
             - containerPort: 9999
           volumeMounts:
             - name: code-volume
-              mountPath: /usr/src/app
+              mountPath: /tmp/code
       volumes:
         - name: code-volume
           configMap:

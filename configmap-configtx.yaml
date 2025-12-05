@@ -24,6 +24,9 @@ data:
           Admins:
             Type: Signature
             Rule: "OR('OrdererOrgMSP.admin')"
+          Endorsement:
+            Type: Signature
+            Rule: "OR('OrdererOrgMSP.member')"
         OrdererEndpoints:
           # Bu, Orderer pod'unu kurduğumuzda kullanacağımız servis adı olacak
           - "svc-orderer.fabric.svc.cluster.local:7050" 
@@ -46,6 +49,9 @@ data:
           Admins:
             Type: Signature
             Rule: "OR('AdminOrgMSP.admin')"
+          Endorsement:
+            Type: Signature
+            Rule: "OR('AdminOrgMSP.peer')"
         AnchorPeers:
           # Bu, AdminPeer'i kurduğumuzda kullanacağımız servis adı olacak
           - Host: svc-admin-peer.fabric.svc.cluster.local
@@ -69,6 +75,9 @@ data:
           Admins:
             Type: Signature
             Rule: "OR('StudentOrgMSP.admin')"
+          Endorsement:
+            Type: Signature
+            Rule: "OR('StudentOrgMSP.peer')"
         AnchorPeers:
           # Bu, StudentPeer'i kurduğumuzda kullanacağımız servis adı olacak
           - Host: svc-student-peer.fabric.svc.cluster.local

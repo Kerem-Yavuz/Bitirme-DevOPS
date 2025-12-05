@@ -50,6 +50,8 @@ spec:
               value: /crypto-config/organizations/peerOrganizations/StudentOrg.com/peers/peer0.StudentOrg.com/tls/server.key
             - name: CORE_PEER_TLS_ROOTCERT_FILE
               value: /crypto-config/organizations/peerOrganizations/StudentOrg.com/peers/peer0.StudentOrg.com/tls/ca.crt
+            - name: CORE_PEER_FILESYSTEMPATH
+              value: /crypto-config/peer-data/student
           ports:
             - containerPort: 7051
             - containerPort: 7052

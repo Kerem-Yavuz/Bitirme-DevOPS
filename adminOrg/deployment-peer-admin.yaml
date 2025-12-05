@@ -50,6 +50,9 @@ spec:
               value: /crypto-config/organizations/peerOrganizations/AdminOrg.com/peers/peer0.AdminOrg.com/tls/server.key
             - name: CORE_PEER_TLS_ROOTCERT_FILE
               value: /crypto-config/organizations/peerOrganizations/AdminOrg.com/peers/peer0.AdminOrg.com/tls/ca.crt
+            - name: CORE_PEER_FILESYSTEMPATH
+              value: /crypto-config/peer-data/admin
+
           ports:
             - containerPort: 7051
             - containerPort: 7052
