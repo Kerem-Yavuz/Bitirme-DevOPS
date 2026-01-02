@@ -1,4 +1,3 @@
-kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -12,7 +11,7 @@ data:
     #!/bin/sh
     OUTPUT=\$2
     # Dosyayı paketten çıkarmak yerine, direkt buraya yazıyoruz. KESİN ÇÖZÜM.
-    echo '{"address":"chaincode-asset.fabric.svc.cluster.local:9999","dial_timeout":"10s","tls_required":false}' > "\$OUTPUT/connection.json"
+    echo '{"address":"chaincode-service.bitirme-app.svc.cluster.local:9999","dial_timeout":"10s","tls_required":false}' > "\$OUTPUT/connection.json"
     exit 0
   release: |
     #!/bin/sh

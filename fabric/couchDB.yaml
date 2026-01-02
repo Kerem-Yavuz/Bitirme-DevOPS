@@ -1,0 +1,73 @@
+# 2. Secret (Admin kullanıcı bilgileri)
+apiVersion: v1
+kind: Secret
+metadata:
+  namespace: fabric
+  name: couchdb-creds
+type: Opaque
+stringData:
+  adminUsername: "root"
+  adminPassword: "1"
+---
+# 4. Headless Service (Pod’ların birbirini bulması için)
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: fabric
+  name: couchdb
+  labels:
+    app: couchdb
+spec:
+  clusterIP: None
+  ports:
+    - port: 5984
+      name: couchdb
+  selector:
+    app: couchdb
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: fabric
+  name: couchdb-service
+spec:
+  selector:
+    app: couchdb
+  ports:
+    - port: 5984
+      targetPort: 5984
+
+---
+# 6. StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  namespace: fabric
+  name: couchdb
+spec:
+  serviceName: couchdb
+  replicas: 3
+  selector:
+    matchLabels:
+      app: couchdb
+  template:
+    metadata:
+      labels:
+        app: couchdb
+    spec:
+      containers:
+        - name: couchdb
+          image: couchdb:3.3
+          ports:
+            - containerPort: 5984
+              name: couchdb
+          env:
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-creds
+                  key: adminUsername
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-creds
+                  key: adminPassword
