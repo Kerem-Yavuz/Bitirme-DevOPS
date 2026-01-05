@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fabric-app
+  labels:
+    app.kubernetes.io/name: fabric-asset-manager
+---
+# Backend ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fabric-backend-config
+  namespace: fabric-app
+data:
+  CHANNEL_NAME: "mychannel"
+  CHAINCODE_NAME: "basic"
+  MSP_ID: "AdminOrgMSP"
+  WALLET_PATH: "/app/wallet"
+  CONNECTION_PROFILE_PATH: "/app/config/connection-profile.json"
+  USER_IDENTITY: "Admin@AdminOrg.com"
+  PORT: "3000"
+---
+# Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fabric-backend
+  namespace: fabric-app
+  labels:
+    app: fabric-backend
+    app.kubernetes.io/name: fabric-asset-manager
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fabric-backend
+  template:
+    metadata:
+      labels:
+        app: fabric-backend
+    spec:
+      containers:
+        - name: fabric-backend
+          image: fabric-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: fabric-backend-config
+          volumeMounts:
+            - name: wallet
+              mountPath: /app/wallet
+              readOnly: true
+            - name: connection-profile
+              mountPath: /app/config
+              readOnly: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: wallet
+          secret:
+            secretName: fabric-wallet
+        - name: connection-profile
+          configMap:
+            name: fabric-connection-profile
+---
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: fabric-backend
+  namespace: fabric-app
+  labels:
+    app: fabric-backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+  selector:
+    app: fabric-backend
+---
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fabric-frontend
+  namespace: fabric-app
+  labels:
+    app: fabric-frontend
+    app.kubernetes.io/name: fabric-asset-manager
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fabric-frontend
+  template:
+    metadata:
+      labels:
+        app: fabric-frontend
+    spec:
+      containers:
+        - name: fabric-frontend
+          image: fabric-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: fabric-frontend
+  namespace: fabric-app
+  labels:
+    app: fabric-frontend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  selector:
+    app: fabric-frontend
+---
+# Ingress (optional - expose frontend externally)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fabric-app-ingress
+  namespace: fabric-app
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: fabric-app.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: fabric-frontend
+                port:
+                  number: 80

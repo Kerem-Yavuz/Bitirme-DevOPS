@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chaincode-deployment
+  namespace: fabric
+  labels:
+    app: chaincode-service
+    component: chaincode
+    version: "1.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chaincode-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: chaincode-service
+        component: chaincode
+        version: "1.0"
+    spec:
+      nodeSelector:
+        storage: longhorn
+      imagePullSecrets:
+        - name: gitlab-reg-cred
+      containers:
+        - name: chaincode
+          image: 172.28.6.240:32003/kerem-bitirme/images/chaincode:latest
+          imagePullPolicy: Always
+          ports:
+            - name: grpc
+              containerPort: 9999
+              protocol: TCP
+          env:
+            - name: CHAINCODE_SERVER_ADDRESS
+              value: "0.0.0.0:9999"
+            # CHAINCODE_ID peer lifecycle chaincode install sonrası alınan Package ID ile güncellenmelidir
+            # Örnek format: basic_1.0:<hash>
+            - name: CHAINCODE_ID
+              value: "basic_1.0:25ce8d6d1fa6e7542c77eb4154a5c54a69c19faba95c69a227d59e6ebb3142fe"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            tcpSocket:
+              port: 9999
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 9999
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chaincode-service
+  namespace: fabric
+  labels:
+    app: chaincode-service
+spec:
+  type: ClusterIP
+  selector:
+    app: chaincode-service
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 9999
+      targetPort: 9999
+
+
+
+
