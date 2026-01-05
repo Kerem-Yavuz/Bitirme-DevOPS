@@ -12,12 +12,12 @@ metadata:
   name: fabric-backend-config
   namespace: fabric-app
 data:
-  CHANNEL_NAME: "mychannel"
+  CHANNEL_NAME: "enrollchannel"
   CHAINCODE_NAME: "basic"
   MSP_ID: "AdminOrgMSP"
   WALLET_PATH: "/app/wallet"
   CONNECTION_PROFILE_PATH: "/app/config/connection-profile.json"
-  USER_IDENTITY: "Admin@AdminOrg.com"
+  USER_IDENTITY: "OrgAdmin"
   PORT: "3000"
 ---
 # Backend Deployment
