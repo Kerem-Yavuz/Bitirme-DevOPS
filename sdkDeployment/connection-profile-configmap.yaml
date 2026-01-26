@@ -1,5 +1,4 @@
-# Fabric Connection Profile ConfigMap
-# TLS certificates must be extracted from the fabric namespace PVC
+# Fabric Connection Profile ConfigMap - SECURE TLS Configuration
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,8 +14,9 @@ data:
         "connection": {
           "timeout": {
             "peer": {
-              "endorser": "300"
-            }
+              "endorser": 300
+            },
+            "orderer": 300
           }
         }
       },
@@ -36,21 +36,21 @@ data:
         "peer0.AdminOrg.com": {
           "url": "grpcs://svc-admin-peer.fabric.svc.cluster.local:7051",
           "tlsCACerts": {
-            "pem": "-----BEGIN CERTIFICATE-----\n<ADMIN_PEER_TLS_CA_CERT>\n-----END CERTIFICATE-----\n"
+            "pem": "-----BEGIN CERTIFICATE-----\nMIIBejCCASCgAwIBAgIURiaLJi4te4esp2SVFduKk+jueDAwCgYIKoZIzj0EAwIw\nGzEZMBcGA1UEAxMQZmFicmljLWNhLXNlcnZlcjAeFw0yNTExMjAxNDMzMDBaFw00\nMDExMTYxNDMzMDBaMBsxGTAXBgNVBAMTEGZhYnJpYy1jYS1zZXJ2ZXIwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAASqEv1f+BkA+/WxcNpL4smmEt5zo9hEmEeAKsn2\n0Kbo63onFEvgfHegBE1KDhZXcwPZQOZ9rc/8o0SooTIRuVh1o0IwQDAOBgNVHQ8B\nAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUHZc2V/WPgETKEmIe\ni4JvGddXJ/YwCgYIKoZIzj0EAwIDSAAwRQIhALhGqQq6JecBm5jxtuejr8K8sRyp\na3KOpLlPqWxKFwW7AiBbH0TlusRDEmHXzYwXW7QZQpZQG2hES0dMBEYLVj1GDA==\n-----END CERTIFICATE-----\n"
           },
           "grpcOptions": {
-            "ssl-target-name-override": "peer0.AdminOrg.com",
-            "hostnameOverride": "peer0.AdminOrg.com"
+            "ssl-target-name-override": "svc-admin-peer.fabric.svc.cluster.local",
+            "hostnameOverride": "svc-admin-peer.fabric.svc.cluster.local"
           }
         },
         "peer0.StudentOrg.com": {
           "url": "grpcs://svc-student-peer.fabric.svc.cluster.local:7051",
           "tlsCACerts": {
-            "pem": "-----BEGIN CERTIFICATE-----\n<STUDENT_PEER_TLS_CA_CERT>\n-----END CERTIFICATE-----\n"
+            "pem": "-----BEGIN CERTIFICATE-----\nMIIBeTCCASCgAwIBAgIUZdmc1qocP0LDkIMe2nYidVC1mFswCgYIKoZIzj0EAwIw\nGzEZMBcGA1UEAxMQZmFicmljLWNhLXNlcnZlcjAeFw0yNTExMjAxNDM0MDBaFw00\nMDExMTYxNDM0MDBaMBsxGTAXBgNVBAMTEGZhYnJpYy1jYS1zZXJ2ZXIwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARnDy+j6/8FDe16n/FVzE6PW8ONd9ALFPgyZAXm\nW33uy5mb2oNDiCKhT62xwXbrkNOJqc5wAYgbtmuRGQlomFdSo0IwQDAOBgNVHQ8B\nAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUZt50aAvOVlPfhx2k\nYEDkX1u7xjQwCgYIKoZIzj0EAwIDRwAwRAIgRaDqQ9FMjm6qO4im+w8iJaKG3qOF\nTIbweaPffqJg+4ECIDSBpabbUbF6bG6Ye4pKxwaXGLX/pJ4unhx/6OA1iznO\n-----END CERTIFICATE-----\n"
           },
           "grpcOptions": {
-            "ssl-target-name-override": "peer0.StudentOrg.com",
-            "hostnameOverride": "peer0.StudentOrg.com"
+            "ssl-target-name-override": "svc-student-peer.fabric.svc.cluster.local",
+            "hostnameOverride": "svc-student-peer.fabric.svc.cluster.local"
           }
         }
       },
@@ -59,20 +59,28 @@ data:
           "url": "https://svc-ca-admin-org.fabric.svc.cluster.local:7054",
           "caName": "ca-admin-org",
           "tlsCACerts": {
-            "pem": ["-----BEGIN CERTIFICATE-----\n<CA_ADMIN_TLS_CERT>\n-----END CERTIFICATE-----\n"]
+            "pem": ["-----BEGIN CERTIFICATE-----\nMIIBejCCASCgAwIBAgIURiaLJi4te4esp2SVFduKk+jueDAwCgYIKoZIzj0EAwIw\nGzEZMBcGA1UEAxMQZmFicmljLWNhLXNlcnZlcjAeFw0yNTExMjAxNDMzMDBaFw00\nMDExMTYxNDMzMDBaMBsxGTAXBgNVBAMTEGZhYnJpYy1jYS1zZXJ2ZXIwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAASqEv1f+BkA+/WxcNpL4smmEt5zo9hEmEeAKsn2\n0Kbo63onFEvgfHegBE1KDhZXcwPZQOZ9rc/8o0SooTIRuVh1o0IwQDAOBgNVHQ8B\nAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUHZc2V/WPgETKEmIe\ni4JvGddXJ/YwCgYIKoZIzj0EAwIDSAAwRQIhALhGqQq6JecBm5jxtuejr8K8sRyp\na3KOpLlPqWxKFwW7AiBbH0TlusRDEmHXzYwXW7QZQpZQG2hES0dMBEYLVj1GDA==\n-----END CERTIFICATE-----\n"]
           },
           "httpOptions": {
-            "verify": false
+            "verify": true
+          },
+          "registrar": {
+            "enrollId": "admin",
+            "enrollSecret": "adminpw"
           }
         },
         "ca-student-org": {
           "url": "https://svc-ca-student-org.fabric.svc.cluster.local:7054",
           "caName": "ca-student-org",
           "tlsCACerts": {
-            "pem": ["-----BEGIN CERTIFICATE-----\n<CA_STUDENT_TLS_CERT>\n-----END CERTIFICATE-----\n"]
+            "pem": ["-----BEGIN CERTIFICATE-----\nMIIBeTCCASCgAwIBAgIUZdmc1qocP0LDkIMe2nYidVC1mFswCgYIKoZIzj0EAwIw\nGzEZMBcGA1UEAxMQZmFicmljLWNhLXNlcnZlcjAeFw0yNTExMjAxNDM0MDBaFw00\nMDExMTYxNDM0MDBaMBsxGTAXBgNVBAMTEGZhYnJpYy1jYS1zZXJ2ZXIwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARnDy+j6/8FDe16n/FVzE6PW8ONd9ALFPgyZAXm\nW33uy5mb2oNDiCKhT62xwXbrkNOJqc5wAYgbtmuRGQlomFdSo0IwQDAOBgNVHQ8B\nAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUZt50aAvOVlPfhx2k\nYEDkX1u7xjQwCgYIKoZIzj0EAwIDRwAwRAIgRaDqQ9FMjm6qO4im+w8iJaKG3qOF\nTIbweaPffqJg+4ECIDSBpabbUbF6bG6Ye4pKxwaXGLX/pJ4unhx/6OA1iznO\n-----END CERTIFICATE-----\n"]
           },
           "httpOptions": {
-            "verify": false
+            "verify": true
+          },
+          "registrar": {
+            "enrollId": "admin",
+            "enrollSecret": "adminpw"
           }
         }
       },
@@ -80,16 +88,16 @@ data:
         "orderer.OrdererOrg.com": {
           "url": "grpcs://svc-orderer.fabric.svc.cluster.local:7050",
           "tlsCACerts": {
-            "pem": "-----BEGIN CERTIFICATE-----\n<ORDERER_TLS_CA_CERT>\n-----END CERTIFICATE-----\n"
+            "pem": "-----BEGIN CERTIFICATE-----\nMIIBeTCCASCgAwIBAgIUfo3hr5IQXdxDvitUUzOvvH3kgUMwCgYIKoZIzj0EAwIw\nGzEZMBcGA1UEAxMQZmFicmljLWNhLXNlcnZlcjAeFw0yNTExMjAxNDM0MDBaFw00\nMDExMTYxNDM0MDBaMBsxGTAXBgNVBAMTEGZhYnJpYy1jYS1zZXJ2ZXIwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAAT/0A8JvCNC2TN+RvZBk6Sz2AB1ozw2onoZy0G0\nF7kF2YVtORwMqO5W9i2PkuA63KSQpBwiXvVZWMjrPOE8Ew9so0IwQDAOBgNVHQ8B\nAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQU+xlmUCpDUxPWoiaT\n47jAw9n5YCQwCgYIKoZIzj0EAwIDRwAwRAIgMRuUA8GeDzODcXSy/KUkO0q9XtxD\nvZ4TyUdzG094mr8CICsp+CQib96OyPvlT8KT02HJL8UD0/NJPAXX7y1zLnL4\n-----END CERTIFICATE-----\n"
           },
           "grpcOptions": {
-            "ssl-target-name-override": "orderer.OrdererOrg.com",
-            "hostnameOverride": "orderer.OrdererOrg.com"
+            "ssl-target-name-override": "svc-orderer.fabric.svc.cluster.local",
+            "hostnameOverride": "svc-orderer.fabric.svc.cluster.local"
           }
         }
       },
       "channels": {
-        "mychannel": {
+        "enrollchannel": {
           "orderers": ["orderer.OrdererOrg.com"],
           "peers": {
             "peer0.AdminOrg.com": {
