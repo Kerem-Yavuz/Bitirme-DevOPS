@@ -1,112 +1,124 @@
-# Hyperledger Fabric Deployment with Bevel-Operator-Fabric
+# Hyperledger Fabric - Bevel Operator Deployment
 
-Bu klasör, Bevel-Operator-Fabric kullanarak Hyperledger Fabric ağını Kubernetes üzerine otomatik olarak deploy etmek için gerekli tüm dosyaları içerir.
+Production-ready Hyperledger Fabric network deployment using Bevel Operator on Kubernetes.
 
-## Ağ Yapısı
+## Prerequisites
 
-| Organizasyon | MSP ID | Bileşen |
-|--------------|--------|---------|
-| OrdererOrg | OrdererOrgMSP | 1 Orderer (Raft) |
-| AdminOrg | AdminOrgMSP | 1 Peer + CouchDB |
-| StudentOrg | StudentOrgMSP | 1 Peer + CouchDB |
+- Kubernetes cluster (k3s, minikube, kind, etc.)
+- kubectl configured
+- Helm 3.x
+- Storage class available (default: `local-path`)
 
-**Kanal:** `enrollchannel`
-
-## Kurulum Adımları
-
-### 1. Operator Kurulumu
+## Quick Start
 
 ```bash
-# Bevel Operator'ı kur
-kubectl apply -f https://github.com/hyperledger-bevel/bevel-operator-fabric/releases/latest/download/install.yaml
+# Make script executable
+chmod +x deploy.sh
 
-# Operator'ın çalıştığını kontrol et
-kubectl get pods -n hlf-operator-system
+# Run deployment
+./deploy.sh
 ```
 
-### 2. Kubectl HLF Plugin Kurulumu (Opsiyonel ama Önerilen)
+The script will automatically:
+1. Install Helm (if missing)
+2. Install kubectl-hlf CLI plugin
+3. Deploy HLF Operator
+4. Create Certificate Authorities (OrdererOrg, AdminOrg, StudentOrg)
+5. Register identities
+6. Deploy Peers with CouchDB
+7. Deploy Orderer (Raft)
+8. Create and join channel
+
+## Network Topology
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Kubernetes                           │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │ ca-orderer  │  │  ca-admin   │  │ ca-student  │         │
+│  │   (CA)      │  │    (CA)     │  │    (CA)     │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐                          │
+│  │ peer0-admin │  │peer0-student│                          │
+│  │  (CouchDB)  │  │  (CouchDB)  │                          │
+│  └─────────────┘  └─────────────┘                          │
+│                                                             │
+│  ┌─────────────┐                                           │
+│  │   orderer   │   Channel: enrollchannel                  │
+│  │   (Raft)    │                                           │
+│  └─────────────┘                                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Organizations
+
+| Organization | MSP ID         | Components          |
+|-------------|----------------|---------------------|
+| OrdererOrg  | OrdererOrgMSP  | ca-orderer, orderer |
+| AdminOrg    | AdminOrgMSP    | ca-admin, peer0-admin |
+| StudentOrg  | StudentOrgMSP  | ca-student, peer0-student |
+
+## Chaincode Deployment
+
+After network deployment:
 
 ```bash
-# Krew yoksa kur
-# https://krew.sigs.k8s.io/docs/user-guide/setup/install/
+# 1. Package your chaincode
+kubectl hlf chaincode package --name=enrollment --version=1.0 --lang=golang --path=./chaincode
 
-# HLF plugin'i kur
-kubectl krew install hlf
+# 2. Install on peers
+kubectl hlf chaincode install --peer=peer0-admin.fabric-bevel --package=enrollment-1.0.tar.gz
+kubectl hlf chaincode install --peer=peer0-student.fabric-bevel --package=enrollment-1.0.tar.gz
+
+# 3. Approve and commit
+kubectl hlf chaincode approveformyorg --peer=peer0-admin.fabric-bevel --channel=enrollchannel --name=enrollment --version=1.0 --sequence=1
+kubectl hlf chaincode commit --peer=peer0-admin.fabric-bevel --channel=enrollchannel --name=enrollment --version=1.0 --sequence=1
 ```
 
-### 3. Namespace Oluştur
+## External Chaincode
+
+For external chaincode (running outside Kubernetes):
 
 ```bash
-kubectl create namespace fabric-bevel
+kubectl apply -f 05-chaincode/chaincode-external.yaml
 ```
 
-### 4. Bileşenleri Sırayla Deploy Et
+## Useful Commands
 
 ```bash
-# 1. CA'ları deploy et
-kubectl apply -f 01-cas/
+# Check components
+kubectl get pods -n fabric-bevel
+kubectl get fabricca,fabricpeer,fabricorderingservice -n fabric-bevel
 
-# CA'ların hazır olmasını bekle (1-2 dakika)
-kubectl get pods -n fabric-bevel -w
+# View CA logs
+kubectl logs -n fabric-bevel -l app=ca-admin
 
-# 2. Peer'ları deploy et (CA'lar hazır olduktan sonra)
-kubectl apply -f 02-peers/
+# View peer logs
+kubectl logs -n fabric-bevel -l app=peer0-admin
 
-# 3. Orderer'ı deploy et
-kubectl apply -f 03-orderers/
-
-# 4. Kanalı oluştur
-kubectl apply -f 04-channels/
+# Cleanup
+helm uninstall hlf-operator -n hlf-operator-system
+kubectl delete namespace fabric-bevel
 ```
 
-### 5. Chaincode Deploy Et
+## Troubleshooting
 
-External chaincode deploy etmek için:
-
+**Storage issues:**
 ```bash
-kubectl apply -f 05-chaincode/
+# Check PVCs
+kubectl get pvc -n fabric-bevel
 ```
 
-## Dosya Yapısı
-
-```
-bevel-operator/
-├── README.md                 # Bu dosya
-├── 01-cas/                   # Certificate Authority tanımları
-│   ├── ca-orderer.yaml
-│   ├── ca-admin.yaml
-│   └── ca-student.yaml
-├── 02-peers/                 # Peer tanımları
-│   ├── peer0-admin.yaml
-│   └── peer0-student.yaml
-├── 03-orderers/              # Orderer tanımları
-│   └── orderer0.yaml
-├── 04-channels/              # Kanal tanımları
-│   └── enrollchannel.yaml
-└── 05-chaincode/             # External chaincode
-    └── chaincode-external.yaml
-```
-
-## Ağı Silmek
-
+**CA not ready:**
 ```bash
-kubectl delete -f 05-chaincode/
-kubectl delete -f 04-channels/
-kubectl delete -f 03-orderers/
-kubectl delete -f 02-peers/
-kubectl delete -f 01-cas/
-kubectl delete namespace fabric
+# Check CA status
+kubectl describe fabricca ca-admin -n fabric-bevel
 ```
 
-## Sorun Giderme
-
+**Peer enrollment failed:**
 ```bash
-# Pod durumlarını kontrol et
-kubectl get pods -n fabric
-
-# Pod loglarını gör
-kubectl logs -n fabric <pod-name>
-
-# CRD durumlarını kontrol et
-kubectl get fabriccas,fabricpeers,fabricorderers -n fabric
+# Check if identity is registered
+kubectl hlf ca identity list --name=ca-admin --namespace=fabric-bevel
 ```
