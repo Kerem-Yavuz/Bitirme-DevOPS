@@ -1,0 +1,22 @@
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricFollowerChannel
+metadata:
+  name: demo-studentorg
+  namespace: fabric-bevel
+spec:
+  anchorPeers:
+    - host: peer0-student.fabric-bevel.svc.cluster.local
+      port: 7051
+  hlfIdentity:
+    secretKey: user.yaml
+    secretName: studentorg-admin
+    secretNamespace: fabric-bevel
+  mspId: StudentOrgMSP
+  name: demo
+  externalPeersToJoin: []
+  orderers:
+    - certificate: ""
+      url: grpcs://orderer-orderer0.fabric-bevel.svc.cluster.local:7050
+  peersToJoin:
+    - name: peer0-student
+      namespace: fabric-bevel
