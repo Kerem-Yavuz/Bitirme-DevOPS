@@ -1,0 +1,81 @@
+# External Chaincode Deployment
+# The chaincode runs as a separate service and peer connects to it
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chaincode-basic
+  namespace: fabric-bevel
+  labels:
+    app: chaincode-basic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chaincode-basic
+  template:
+    metadata:
+      labels:
+        app: chaincode-basic
+    spec:
+      containers:
+        - name: chaincode
+          # Your chaincode image from GitLab registry
+          image: 172.28.6.240:32003/kerem-bitirme/images/chaincode:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9999
+              protocol: TCP
+          env:
+            - name: CHAINCODE_SERVER_ADDRESS
+              value: "0.0.0.0:9999"
+            # CHAINCODE_ID will be updated after chaincode package install
+            # Get it via: peer lifecycle chaincode queryinstalled
+            - name: CHAINCODE_ID
+              value: "basic_1.0:REPLACE_WITH_PACKAGE_ID"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      imagePullSecrets:
+        - name: gitlab-reg-cred
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chaincode-basic
+  namespace: fabric-bevel
+  labels:
+    app: chaincode-basic
+spec:
+  type: ClusterIP
+  selector:
+    app: chaincode-basic
+  ports:
+    - name: chaincode
+      port: 9999
+      targetPort: 9999
+      protocol: TCP
+---
+# Chaincode package connection.json content
+# This will be used when installing the chaincode package
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chaincode-connection
+  namespace: fabric-bevel
+data:
+  connection.json: |
+    {
+      "address": "chaincode-basic.fabric-bevel.svc.cluster.local:9999",
+      "dial_timeout": "10s",
+      "tls_required": false
+    }
+  metadata.json: |
+    {
+      "type": "external",
+      "label": "basic_1.0"
+    }

@@ -1,0 +1,55 @@
+# Orderer Node (Raft - single node)
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricOrderingService
+metadata:
+  name: orderer
+  namespace: fabric-bevel
+spec:
+  image: hyperledger/fabric-orderer
+  version: 2.5.5
+  replicas: 1
+  mspID: OrdererOrgMSP
+  systemChannel:
+    name: system-channel
+    config:
+      name: OrdererGenesis
+  # CA reference
+  secret:
+    enrollment:
+      component:
+        cahost: ca-orderer.fabric-bevel.svc.cluster.local
+        caname: ca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+      tls:
+        cahost: ca-orderer.fabric-bevel.svc.cluster.local
+        caname: tlsca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+        csr:
+          hosts:
+            - orderer0.fabric-bevel.svc.cluster.local
+            - orderer0
+  nodes:
+    - id: orderer0
+      host: orderer0.fabric-bevel.svc.cluster.local
+      port: 7050
+  service:
+    type: ClusterIP
+  storage:
+    size: 10Gi
+    storageClass: "longhorn"
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi

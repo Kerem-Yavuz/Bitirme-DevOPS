@@ -1,0 +1,155 @@
+# OrdererOrg Certificate Authority
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricCA
+metadata:
+  name: ca-orderer
+  namespace: fabric-bevel
+spec:
+  image: hyperledger/fabric-ca
+  version: 1.5.6
+  debug: false
+  hosts:
+    - localhost
+    - ca-orderer
+    - ca-orderer.fabric-bevel
+    - ca-orderer.fabric-bevel.svc.cluster.local
+  service:
+    type: ClusterIP
+  storage:
+    accessMode: ReadWriteOnce
+    size: 3Gi
+    storageClass: "local-path"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ca:
+    name: ca
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: "256"
+    cfg:
+      affiliations:
+        allowRemove: true
+      identities:
+        allowRemove: true
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+        pathLength: 0
+      cn: ca
+      hosts:
+        - localhost
+        - ca-orderer
+        - ca-orderer.fabric-bevel.svc.cluster.local
+      names:
+        - C: TR
+          L: Istanbul
+          O: OrdererOrg
+          OU: ""
+          ST: ""
+    intermediate:
+      parentServer:
+        caName: ""
+        url: ""
+    registry:
+      identities:
+        - name: admin
+          pass: adminpw
+          type: client
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Registrar.DelegateRoles: "*"
+            hf.Revoker: true
+            hf.IntermediateCA: true
+            hf.GenCRL: true
+            hf.Registrar.Attributes: "*"
+            hf.AffiliationMgr: true
+      max_enrollments: -1
+    subject:
+      C: TR
+      L: Istanbul
+      O: OrdererOrg
+      OU: ""
+      ST: ""
+      cn: ca
+  tlsCA:
+    name: tlsca
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: "256"
+    cfg:
+      affiliations:
+        allowRemove: true
+      identities:
+        allowRemove: true
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+        pathLength: 0
+      cn: tlsca
+      hosts:
+        - localhost
+        - ca-orderer
+        - ca-orderer.fabric-bevel.svc.cluster.local
+      names:
+        - C: TR
+          L: Istanbul
+          O: OrdererOrg
+          OU: ""
+          ST: ""
+    intermediate:
+      parentServer:
+        caName: ""
+        url: ""
+    registry:
+      identities:
+        - name: admin
+          pass: adminpw
+          type: client
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Registrar.DelegateRoles: "*"
+            hf.Revoker: true
+            hf.IntermediateCA: true
+            hf.GenCRL: true
+            hf.Registrar.Attributes: "*"
+            hf.AffiliationMgr: true
+      max_enrollments: -1
+    subject:
+      C: TR
+      L: Istanbul
+      O: OrdererOrg
+      OU: ""
+      ST: ""
+      cn: tlsca
+  rootCA:
+    subject:
+      C: TR
+      L: Istanbul
+      O: OrdererOrg
+      OU: ""
+      ST: ""
+      cn: ca
+  metrics:
+    provider: prometheus
+  db:
+    type: sqlite3
+    datasource: fabric-ca-server.db
+  clrSizeLimit: 512000
+  cors:
+    enabled: false
+    origins: []

@@ -1,0 +1,75 @@
+# StudentOrg Peer0
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricPeer
+metadata:
+  name: peer0-student
+  namespace: fabric-bevel
+spec:
+  image: hyperledger/fabric-peer
+  version: 2.5.5
+  # CA reference for enrollment
+  secret:
+    enrollment:
+      component:
+        cahost: ca-student.fabric-bevel.svc.cluster.local
+        caname: ca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+      tls:
+        cahost: ca-student.fabric-bevel.svc.cluster.local
+        caname: tlsca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+        csr:
+          hosts:
+            - peer0-student.fabric-bevel.svc.cluster.local
+            - peer0-student
+  mspID: StudentOrgMSP
+  hosts:
+    - peer0-student.fabric-bevel.svc.cluster.local
+    - peer0-student.localho.st
+  service:
+    type: ClusterIP
+  storage:
+    size: 10Gi
+    storageClass: "longhorn"
+    accessMode: ReadWriteOnce
+  stateDb: couchdb
+  couchdb:
+    image: couchdb
+    version: 3.3.2
+    user: couchdb
+    password: couchdbpwd
+    storage:
+      size: 10Gi
+      storageClass: "longhorn"
+      accessMode: ReadWriteOnce
+  gossip:
+    externalEndpoint: peer0-student.fabric-bevel.svc.cluster.local:7051
+    bootstrap: peer0-student.fabric-bevel.svc.cluster.local:7051
+    endpoint: peer0-student.fabric-bevel.svc.cluster.local:7051
+    useLeaderElection: true
+    orgLeader: false
+  resources:
+    peer:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+    couchdb:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  externalChaincodeBuilder: true
+  externalBuilders: []
