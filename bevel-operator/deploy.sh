@@ -544,11 +544,28 @@ echo "✅ CAs deployed"
 echo ""
 echo "Step 4: Waiting for CA pods to be running..."
 
+# First check if operator created pods
+sleep 30
+echo "Checking operator logs..."
+kubectl logs -n hlf-operator-system -l app.kubernetes.io/name=hlf-operator --tail=20 2>/dev/null || true
+
+echo ""
+echo "Checking FabricCA status..."
+kubectl get fabriccas.hlf.kungfusoftware.es -n $NAMESPACE -o wide
+
+echo ""
+echo "Waiting for pods (max 5 minutes)..."
 for i in {1..30}; do
-    READY=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | grep -c "Running" || echo "0")
-    TOTAL=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | wc -l || echo "0")
-    echo "Pods ready: $READY/$TOTAL"
-    if [ "$READY" -ge 3 ]; then
+    POD_COUNT=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | wc -l | tr -d ' ')
+    RUNNING_COUNT=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | grep -c "Running" || true)
+    
+    # Default to 0 if empty
+    POD_COUNT=${POD_COUNT:-0}
+    RUNNING_COUNT=${RUNNING_COUNT:-0}
+    
+    echo "Pods: $RUNNING_COUNT running out of $POD_COUNT total"
+    
+    if [[ "$RUNNING_COUNT" =~ ^[0-9]+$ ]] && [ "$RUNNING_COUNT" -ge 3 ]; then
         echo "✅ All CA pods running"
         break
     fi
