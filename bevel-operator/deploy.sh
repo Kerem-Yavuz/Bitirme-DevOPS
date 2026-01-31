@@ -535,21 +535,317 @@ EOF
 echo "Waiting for CAs to be ready (this may take 2-3 minutes)..."
 sleep 60
 kubectl get pods -n $NAMESPACE
-kubectl get fabricca -n $NAMESPACE
+kubectl get fabriccas.hlf.kungfusoftware.es -n $NAMESPACE
 echo "✅ CAs deployed"
+
+# ------------------------------------------------
+# Step 4: Wait for CAs to be Running
+# ------------------------------------------------
+echo ""
+echo "Step 4: Waiting for CA pods to be running..."
+
+for i in {1..30}; do
+    READY=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | grep -c "Running" || echo "0")
+    TOTAL=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | wc -l || echo "0")
+    echo "Pods ready: $READY/$TOTAL"
+    if [ "$READY" -ge 3 ]; then
+        echo "✅ All CA pods running"
+        break
+    fi
+    sleep 10
+done
+
+kubectl get pods -n $NAMESPACE
+
+# ------------------------------------------------
+# Step 5: Deploy Peers
+# ------------------------------------------------
+echo ""
+echo "Step 5: Deploying Peers..."
+
+# Peer0 AdminOrg
+cat <<EOF | kubectl apply -f -
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricPeer
+metadata:
+  name: peer0-admin
+  namespace: $NAMESPACE
+spec:
+  image: hyperledger/fabric-peer
+  tag: 2.5.0
+  mspID: AdminOrgMSP
+  hosts: []
+  service:
+    type: ClusterIP
+  storage:
+    peer:
+      accessMode: ReadWriteOnce
+      size: 5Gi
+      storageClass: "$STORAGE_CLASS"
+    chaincode:
+      accessMode: ReadWriteOnce
+      size: 2Gi
+      storageClass: "$STORAGE_CLASS"
+    couchdb:
+      accessMode: ReadWriteOnce
+      size: 5Gi
+      storageClass: "$STORAGE_CLASS"
+  resources:
+    peer:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    couchdb:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    chaincode:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  couchdb:
+    user: couchdb
+    password: couchdb
+  stateDb: couchdb
+  gossip:
+    externalEndpoint: ""
+    bootstrap: ""
+    endpoint: ""
+    useLeaderElection: true
+    orgLeader: false
+  logging:
+    level: info
+    peer: info
+    cauthdsl: warning
+    gossip: info
+    grpc: error
+    ledger: info
+    msp: info
+    policies: warning
+  discovery:
+    period: 60s
+    touchPeriod: 60s
+  externalChaincodeBuilder: true
+  secret:
+    enrollment:
+      component:
+        cahost: ca-admin.$NAMESPACE.svc.cluster.local
+        caname: ca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+      tls:
+        cahost: ca-admin.$NAMESPACE.svc.cluster.local
+        caname: tlsca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+        csr:
+          cn: peer0-admin
+          hosts:
+            - peer0-admin
+            - peer0-admin.$NAMESPACE.svc.cluster.local
+EOF
+
+# Peer0 StudentOrg
+cat <<EOF | kubectl apply -f -
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricPeer
+metadata:
+  name: peer0-student
+  namespace: $NAMESPACE
+spec:
+  image: hyperledger/fabric-peer
+  tag: 2.5.0
+  mspID: StudentOrgMSP
+  hosts: []
+  service:
+    type: ClusterIP
+  storage:
+    peer:
+      accessMode: ReadWriteOnce
+      size: 5Gi
+      storageClass: "$STORAGE_CLASS"
+    chaincode:
+      accessMode: ReadWriteOnce
+      size: 2Gi
+      storageClass: "$STORAGE_CLASS"
+    couchdb:
+      accessMode: ReadWriteOnce
+      size: 5Gi
+      storageClass: "$STORAGE_CLASS"
+  resources:
+    peer:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    couchdb:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    chaincode:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  couchdb:
+    user: couchdb
+    password: couchdb
+  stateDb: couchdb
+  gossip:
+    externalEndpoint: ""
+    bootstrap: ""
+    endpoint: ""
+    useLeaderElection: true
+    orgLeader: false
+  logging:
+    level: info
+    peer: info
+    cauthdsl: warning
+    gossip: info
+    grpc: error
+    ledger: info
+    msp: info
+    policies: warning
+  discovery:
+    period: 60s
+    touchPeriod: 60s
+  externalChaincodeBuilder: true
+  secret:
+    enrollment:
+      component:
+        cahost: ca-student.$NAMESPACE.svc.cluster.local
+        caname: ca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+      tls:
+        cahost: ca-student.$NAMESPACE.svc.cluster.local
+        caname: tlsca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+        csr:
+          cn: peer0-student
+          hosts:
+            - peer0-student
+            - peer0-student.$NAMESPACE.svc.cluster.local
+EOF
+
+echo "Waiting for Peers..."
+sleep 30
+kubectl get fabricpeers.hlf.kungfusoftware.es -n $NAMESPACE
+echo "✅ Peers deployed"
+
+# ------------------------------------------------
+# Step 6: Deploy Orderer
+# ------------------------------------------------
+echo ""
+echo "Step 6: Deploying Orderer..."
+
+cat <<EOF | kubectl apply -f -
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricOrdererNode
+metadata:
+  name: orderer0
+  namespace: $NAMESPACE
+spec:
+  image: hyperledger/fabric-orderer
+  tag: 2.5.0
+  mspID: OrdererOrgMSP
+  hosts: []
+  service:
+    type: ClusterIP
+  storage:
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    storageClass: "$STORAGE_CLASS"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  genesis: ""
+  secret:
+    enrollment:
+      component:
+        cahost: ca-orderer.$NAMESPACE.svc.cluster.local
+        caname: ca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+      tls:
+        cahost: ca-orderer.$NAMESPACE.svc.cluster.local
+        caname: tlsca
+        caport: 7054
+        catls:
+          cacert: ""
+        enrollid: admin
+        enrollsecret: adminpw
+        csr:
+          cn: orderer0
+          hosts:
+            - orderer0
+            - orderer0.$NAMESPACE.svc.cluster.local
+EOF
+
+echo "Waiting for Orderer..."
+sleep 30
+kubectl get fabricorderernodes.hlf.kungfusoftware.es -n $NAMESPACE
+echo "✅ Orderer deployed"
 
 # ------------------------------------------------
 # Summary
 # ------------------------------------------------
 echo ""
 echo "=============================================="
-echo "✅ Phase 1 Complete - CAs Deployed!"
+echo "✅ Deployment Complete!"
 echo "=============================================="
 echo ""
+echo "All Resources:"
+echo ""
 echo "CAs:"
-kubectl get fabricca -n $NAMESPACE
+kubectl get fabriccas.hlf.kungfusoftware.es -n $NAMESPACE
+echo ""
+echo "Peers:"
+kubectl get fabricpeers.hlf.kungfusoftware.es -n $NAMESPACE
+echo ""
+echo "Orderers:"
+kubectl get fabricorderernodes.hlf.kungfusoftware.es -n $NAMESPACE
 echo ""
 echo "Pods:"
 kubectl get pods -n $NAMESPACE
 echo ""
-echo "Next: Once CAs are Running, deploy peers and orderers"
+echo "Next Steps:"
+echo "1. Wait for all pods to be Running"
+echo "2. Create channel"
+echo "3. Deploy chaincode"
