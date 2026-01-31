@@ -5,9 +5,76 @@ metadata:
   name: peer0-student
   namespace: fabric-bevel
 spec:
-  image: hyperledger/fabric-peer
-  version: 2.5.5
-  # CA reference for enrollment
+  image: quay.io/kfsoftware/fabric-peer
+  tag: amd64-2.5.0
+  dockerSocketPath: "/var/run/docker.sock"
+  mspID: StudentOrgMSP
+  hosts:
+    - peer0-student
+    - peer0-student.fabric-bevel
+    - peer0-student.fabric-bevel.svc.cluster.local
+  externalEndpoint: ""
+  external_chaincode_builder: true
+  istio:
+    port: 443
+  service:
+    type: ClusterIP
+  storage:
+    couchdb:
+      accessMode: ReadWriteOnce
+      storageClass: "local-path"
+      size: "5Gi"
+    peer:
+      accessMode: ReadWriteOnce
+      size: "5Gi"
+      storageClass: "local-path"
+    chaincode:
+      accessMode: ReadWriteOnce
+      size: "2Gi"
+      storageClass: "local-path"
+  couchdb:
+    user: "couchdb"
+    password: "couchdb"
+  gossip:
+    externalEndpoint: ""
+    endpoint: ""
+    bootstrap: ""
+    orgLeader: false
+    useLeaderElection: true
+  discovery:
+    period: "60s"
+    touchPeriod: "60s"
+  logging:
+    level: info
+    peer: info
+    cauthdsl: warning
+    gossip: info
+    grpc: error
+    ledger: info
+    msp: info
+    policies: warning
+  resources:
+    peer:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    couchdb:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "500m"
+        memory: 512Mi
+    chaincode:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: "500m"
+        memory: 512Mi
   secret:
     enrollment:
       component:
@@ -24,52 +91,11 @@ spec:
         caport: 7054
         catls:
           cacert: ""
+        csr:
+          cn: "peer0-student"
+          hosts:
+            - "peer0-student"
+            - "peer0-student.fabric-bevel.svc.cluster.local"
         enrollid: admin
         enrollsecret: adminpw
-        csr:
-          hosts:
-            - peer0-student.fabric-bevel.svc.cluster.local
-            - peer0-student
-  mspID: StudentOrgMSP
-  hosts:
-    - peer0-student.fabric-bevel.svc.cluster.local
-    - peer0-student.localho.st
-  service:
-    type: ClusterIP
-  storage:
-    size: 10Gi
-    storageClass: "longhorn"
-    accessMode: ReadWriteOnce
   stateDb: couchdb
-  couchdb:
-    image: couchdb
-    version: 3.3.2
-    user: couchdb
-    password: couchdbpwd
-    storage:
-      size: 10Gi
-      storageClass: "longhorn"
-      accessMode: ReadWriteOnce
-  gossip:
-    externalEndpoint: peer0-student.fabric-bevel.svc.cluster.local:7051
-    bootstrap: peer0-student.fabric-bevel.svc.cluster.local:7051
-    endpoint: peer0-student.fabric-bevel.svc.cluster.local:7051
-    useLeaderElection: true
-    orgLeader: false
-  resources:
-    peer:
-      requests:
-        cpu: 200m
-        memory: 512Mi
-      limits:
-        cpu: 1
-        memory: 1Gi
-    couchdb:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-  externalChaincodeBuilder: true
-  externalBuilders: []
