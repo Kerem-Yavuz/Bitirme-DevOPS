@@ -1,163 +1,536 @@
 #!/bin/bash
 # =============================================================================
-# Hyperledger Fabric Network Deployment - Bevel Operator
+# Hyperledger Fabric Network Deployment - Official HLF-Operator Method
+# Uses Istio + localho.st DNS (Official Approach)
 # =============================================================================
 
 set -e
 
-NAMESPACE="fabric-bevel"
-STORAGE_CLASS="local-path"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+echo_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+echo_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# Configuration
+PEER_IMAGE=hyperledger/fabric-peer
+PEER_VERSION=2.5.0
+ORDERER_IMAGE=hyperledger/fabric-orderer
+ORDERER_VERSION=2.5.0
+CA_IMAGE=hyperledger/fabric-ca
+CA_VERSION=1.5.6
+SC_NAME=local-path  # For K3D
 
 echo "=============================================="
 echo "Hyperledger Fabric Network Deployment"
+echo "Official HLF-Operator Method (Istio + localho.st)"
 echo "=============================================="
 
 # ------------------------------------------------
 # Step 1: Install HLF Operator
 # ------------------------------------------------
 echo ""
-echo "Step 1: Installing HLF Operator..."
+echo_info "Step 1: Installing HLF Operator..."
 
 helm repo add kfs https://kfsoftware.github.io/hlf-helm-charts --force-update
 
-if helm list -n hlf-operator-system 2>/dev/null | grep -q hlf-operator; then
-    echo "✅ Operator already installed"
+if helm list 2>/dev/null | grep -q hlf-operator; then
+    echo_info "Operator already installed"
 else
-    echo "Installing operator..."
-    helm install hlf-operator kfs/hlf-operator -n hlf-operator-system --create-namespace --wait
+    echo_info "Installing operator..."
+    helm install hlf-operator --version=1.13.0 kfs/hlf-operator
 fi
 
-echo "Waiting for operator..."
-kubectl wait --for=condition=available --timeout=180s deployment -l app.kubernetes.io/name=hlf-operator -n hlf-operator-system || true
-sleep 20
+echo_info "Waiting for operator to be ready..."
+sleep 10
+kubectl wait --for=condition=available --timeout=180s deployment -l app.kubernetes.io/name=hlf-operator || true
 
-echo "Checking CRDs..."
-kubectl get crd | grep hlf
-echo "✅ Operator ready"
+echo_info "✅ Operator ready"
 
 # ------------------------------------------------
-# Step 2: Create Namespace
+# Step 2: Check kubectl-hlf plugin
 # ------------------------------------------------
 echo ""
-echo "Step 2: Creating namespace..."
-kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-echo "✅ Namespace ready"
+echo_info "Step 2: Checking kubectl-hlf plugin..."
+
+if ! kubectl hlf version &>/dev/null; then
+    echo_error "kubectl-hlf plugin not found!"
+    echo_warn "Please install it manually:"
+    echo "  kubectl krew install hlf"
+    echo ""
+    echo "If you don't have krew, install it first from:"
+    echo "  https://krew.sigs.k8s.io/docs/user-guide/setup/install/"
+    exit 1
+fi
+
+echo_info "✅ kubectl-hlf plugin found"
 
 # ------------------------------------------------
-# Step 3: Deploy CAs
+# Step 3: Install Istio
 # ------------------------------------------------
 echo ""
-echo "Step 3: Deploying Certificate Authorities..."
-kubectl apply -f "$SCRIPT_DIR/manifests/ca-orderer.yaml"
-kubectl apply -f "$SCRIPT_DIR/manifests/ca-admin.yaml"
-kubectl apply -f "$SCRIPT_DIR/manifests/ca-student.yaml"
-echo "✅ CA resources created"
+echo_info "Step 3: Installing Istio..."
 
-# ------------------------------------------------
-# Step 4: Wait for CAs to be running
-# ------------------------------------------------
-echo ""
-echo "Step 4: Waiting for CA pods (this may take 2-3 minutes)..."
+if kubectl get namespace istio-system &>/dev/null; then
+    echo_info "Istio namespace exists, checking installation..."
+else
+    kubectl create namespace istio-system
+fi
 
-for i in {1..30}; do
-    echo "Checking pods... ($i/30)"
+# Check if Istio is already installed
+if kubectl get pods -n istio-system 2>/dev/null | grep -q "istiod"; then
+    echo_info "Istio already installed"
+else
+    echo_info "Installing Istio..."
     
-    RUNNING=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | grep -c "Running" || echo "0")
-    TOTAL=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | wc -l | tr -d ' ' || echo "0")
-    
-    echo "  Running: $RUNNING / Total: $TOTAL"
-    
-    if [ "$RUNNING" -ge 3 ] 2>/dev/null; then
-        echo "✅ All CA pods running"
-        break
+    # Check if istioctl is available
+    if ! command -v istioctl &>/dev/null; then
+        echo_warn "istioctl not found. Installing Istio..."
+        curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.23.3 sh -
+        export PATH="$PWD/istio-1.23.3/bin:$PATH"
     fi
-    sleep 10
-done
-
-kubectl get pods -n $NAMESPACE
-
-# ------------------------------------------------
-# Step 5: Deploy Peers
-# ------------------------------------------------
-echo ""
-echo "Step 5: Deploying Peers..."
-kubectl apply -f "$SCRIPT_DIR/manifests/peer0-admin.yaml"
-kubectl apply -f "$SCRIPT_DIR/manifests/peer0-student.yaml"
-echo "✅ Peer resources created"
-
-# ------------------------------------------------
-# Step 6: Deploy Orderer
-# ------------------------------------------------
-echo ""
-echo "Step 6: Deploying Orderer..."
-kubectl apply -f "$SCRIPT_DIR/manifests/orderer0.yaml"
-echo "✅ Orderer resource created"
-
-# ------------------------------------------------
-# Step 7: Wait for all pods
-# ------------------------------------------------
-echo ""
-echo "Step 7: Waiting for all pods (this may take 3-5 minutes)..."
-
-for i in {1..30}; do
-    echo "Checking pods... ($i/30)"
-    kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null || true
     
-    RUNNING=$(kubectl get pods -n $NAMESPACE --no-headers 2>/dev/null | grep -c "Running" || echo "0")
+    istioctl operator init
     
-    # 3 CAs + 2 Peers (each with CouchDB = 4 pods) + 1 Orderer = at least 8 pods
-    if [ "$RUNNING" -ge 6 ] 2>/dev/null; then
-        echo "✅ Most pods running"
-        break
-    fi
-    sleep 10
-done
+    kubectl apply -f - <<EOF
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-gateway
+  namespace: istio-system
+spec:
+  addonComponents:
+    grafana:
+      enabled: false
+    kiali:
+      enabled: false
+    prometheus:
+      enabled: false
+    tracing:
+      enabled: false
+  components:
+    ingressGateways:
+      - enabled: true
+        k8s:
+          hpaSpec:
+            minReplicas: 1
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          service:
+            ports:
+              - name: http
+                port: 80
+                targetPort: 8080
+                nodePort: 30949
+              - name: https
+                port: 443
+                targetPort: 8443
+                nodePort: 30950
+            type: NodePort
+        name: istio-ingressgateway
+    pilot:
+      enabled: true
+      k8s:
+        hpaSpec:
+          minReplicas: 1
+        resources:
+          limits:
+            cpu: 300m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+  meshConfig:
+    accessLogFile: /dev/stdout
+    enableTracing: false
+    outboundTrafficPolicy:
+      mode: ALLOW_ANY
+  profile: default
+EOF
+    
+    echo_info "Waiting for Istio to be ready..."
+    sleep 30
+    kubectl wait --for=condition=available --timeout=300s deployment -l app=istiod -n istio-system || true
+fi
+
+echo_info "✅ Istio ready"
 
 # ------------------------------------------------
-# Step 8: Create Channel
+# Step 4: Configure CoreDNS
 # ------------------------------------------------
 echo ""
-echo "Step 8: Creating channel..."
-kubectl apply -f "$SCRIPT_DIR/manifests/channel-demo.yaml" 2>/dev/null || true
-echo "✅ Channel resource created"
+echo_info "Step 4: Configuring CoreDNS for localho.st..."
+
+kubectl apply -f - <<EOF
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        rewrite name regex (.*)\.localho\.st istio-ingressgateway.istio-system.svc.cluster.local
+        hosts {
+           fallthrough
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+EOF
+
+kubectl rollout restart deployment coredns -n kube-system
+sleep 10
+
+echo_info "✅ CoreDNS configured"
 
 # ------------------------------------------------
-# Step 9: Join peers to channel
+# Step 5: Create Certificate Authorities
 # ------------------------------------------------
 echo ""
-echo "Step 9: Joining peers to channel..."
-kubectl apply -f "$SCRIPT_DIR/manifests/channel-join-admin.yaml" 2>/dev/null || true
-kubectl apply -f "$SCRIPT_DIR/manifests/channel-join-student.yaml" 2>/dev/null || true
-echo "✅ Channel join resources created"
+echo_info "Step 5: Creating Certificate Authorities..."
+
+# AdminOrg CA
+echo_info "Creating CA for AdminOrg..."
+kubectl hlf ca create --image=$CA_IMAGE --version=$CA_VERSION \
+  --storage-class=$SC_NAME --capacity=1Gi \
+  --name=ca-admin --enroll-id=enroll --enroll-pw=enrollpw \
+  --hosts=ca-admin.localho.st --istio-port=443 || echo_warn "CA admin may already exist"
+
+# StudentOrg CA
+echo_info "Creating CA for StudentOrg..."
+kubectl hlf ca create --image=$CA_IMAGE --version=$CA_VERSION \
+  --storage-class=$SC_NAME --capacity=1Gi \
+  --name=ca-student --enroll-id=enroll --enroll-pw=enrollpw \
+  --hosts=ca-student.localho.st --istio-port=443 || echo_warn "CA student may already exist"
+
+# Orderer CA
+echo_info "Creating CA for Orderer..."
+kubectl hlf ca create --image=$CA_IMAGE --version=$CA_VERSION \
+  --storage-class=$SC_NAME --capacity=1Gi \
+  --name=ca-orderer --enroll-id=enroll --enroll-pw=enrollpw \
+  --hosts=ca-orderer.localho.st --istio-port=443 || echo_warn "CA orderer may already exist"
+
+echo_info "Waiting for CAs to be ready..."
+kubectl wait --timeout=300s --for=condition=Running fabriccas.hlf.kungfusoftware.es --all || true
+
+echo_info "✅ CAs created"
+
+# ------------------------------------------------
+# Step 6: Register Identities
+# ------------------------------------------------
+echo ""
+echo_info "Step 6: Registering identities..."
+
+# AdminOrg peer
+kubectl hlf ca register --name=ca-admin --user=peer --secret=peerpw --type=peer \
+  --enroll-id enroll --enroll-secret=enrollpw --mspid AdminOrgMSP || echo_warn "Peer identity may already exist"
+
+# StudentOrg peer
+kubectl hlf ca register --name=ca-student --user=peer --secret=peerpw --type=peer \
+  --enroll-id enroll --enroll-secret=enrollpw --mspid StudentOrgMSP || echo_warn "Peer identity may already exist"
+
+# Orderer
+kubectl hlf ca register --name=ca-orderer --user=orderer --secret=ordererpw --type=orderer \
+  --enroll-id enroll --enroll-secret=enrollpw --mspid OrdererMSP || echo_warn "Orderer identity may already exist"
+
+echo_info "✅ Identities registered"
+
+# ------------------------------------------------
+# Step 7: Create Peers
+# ------------------------------------------------
+echo ""
+echo_info "Step 7: Creating Peers..."
+
+# AdminOrg Peer
+echo_info "Creating peer for AdminOrg..."
+kubectl hlf peer create --statedb=couchdb --image=$PEER_IMAGE --version=$PEER_VERSION \
+  --storage-class=$SC_NAME --enroll-id=peer --mspid=AdminOrgMSP \
+  --enroll-pw=peerpw --capacity=5Gi --name=peer0-admin --ca-name=ca-admin.default \
+  --hosts=peer0-admin.localho.st --istio-port=443 || echo_warn "Peer admin may already exist"
+
+# StudentOrg Peer
+echo_info "Creating peer for StudentOrg..."
+kubectl hlf peer create --statedb=couchdb --image=$PEER_IMAGE --version=$PEER_VERSION \
+  --storage-class=$SC_NAME --enroll-id=peer --mspid=StudentOrgMSP \
+  --enroll-pw=peerpw --capacity=5Gi --name=peer0-student --ca-name=ca-student.default \
+  --hosts=peer0-student.localho.st --istio-port=443 || echo_warn "Peer student may already exist"
+
+echo_info "Waiting for peers to be ready..."
+kubectl wait --timeout=300s --for=condition=Running fabricpeers.hlf.kungfusoftware.es --all || true
+
+echo_info "✅ Peers created"
+
+# ------------------------------------------------
+# Step 8: Create Orderer
+# ------------------------------------------------
+echo ""
+echo_info "Step 8: Creating Orderer..."
+
+kubectl hlf ordnode create --image=$ORDERER_IMAGE --version=$ORDERER_VERSION \
+  --storage-class=$SC_NAME --enroll-id=orderer --mspid=OrdererMSP \
+  --enroll-pw=ordererpw --capacity=2Gi --name=orderer0 --ca-name=ca-orderer.default \
+  --hosts=orderer0.localho.st --admin-hosts=admin-orderer0.localho.st --istio-port=443 \
+  || echo_warn "Orderer may already exist"
+
+echo_info "Waiting for orderer to be ready..."
+kubectl wait --timeout=300s --for=condition=Running fabricorderernodes.hlf.kungfusoftware.es --all || true
+
+echo_info "✅ Orderer created"
+
+# ------------------------------------------------
+# Step 9: Create Channel Identities
+# ------------------------------------------------
+echo ""
+echo_info "Step 9: Creating channel admin identities..."
+
+# OrdererMSP admin
+kubectl hlf ca register --name=ca-orderer --user=admin --secret=adminpw \
+  --type=admin --enroll-id enroll --enroll-secret=enrollpw --mspid=OrdererMSP || true
+
+kubectl hlf ca enroll --name=ca-orderer --namespace=default \
+  --user=admin --secret=adminpw --mspid OrdererMSP \
+  --ca-name tlsca --output orderermsp.yaml || true
+
+kubectl hlf ca enroll --name=ca-orderer --namespace=default \
+  --user=admin --secret=adminpw --mspid OrdererMSP \
+  --ca-name ca --output orderermspsign.yaml || true
+
+# AdminOrgMSP admin
+kubectl hlf ca register --name=ca-admin --user=admin --secret=adminpw \
+  --type=admin --enroll-id enroll --enroll-secret=enrollpw --mspid=AdminOrgMSP || true
+
+kubectl hlf ca enroll --name=ca-admin --namespace=default \
+  --user=admin --secret=adminpw --mspid AdminOrgMSP \
+  --ca-name ca --output adminorgmsp.yaml || true
+
+kubectl hlf identity create --name adminorg-admin --namespace default \
+  --ca-name ca-admin --ca-namespace default \
+  --ca ca --mspid AdminOrgMSP --enroll-id admin --enroll-secret adminpw || true
+
+# StudentOrgMSP admin
+kubectl hlf ca register --name=ca-student --user=admin --secret=adminpw \
+  --type=admin --enroll-id enroll --enroll-secret=enrollpw --mspid=StudentOrgMSP || true
+
+kubectl hlf ca enroll --name=ca-student --namespace=default \
+  --user=admin --secret=adminpw --mspid StudentOrgMSP \
+  --ca-name ca --output studentorgmsp.yaml || true
+
+kubectl hlf identity create --name studentorg-admin --namespace default \
+  --ca-name ca-student --ca-namespace default \
+  --ca ca --mspid StudentOrgMSP --enroll-id admin --enroll-secret adminpw || true
+
+echo_info "✅ Channel identities created"
+
+# ------------------------------------------------
+# Step 10: Create Wallet Secret
+# ------------------------------------------------
+echo ""
+echo_info "Step 10: Creating wallet secret..."
+
+kubectl delete secret wallet --ignore-not-found
+
+kubectl create secret generic wallet --namespace=default \
+  --from-file=adminorgmsp.yaml=$PWD/adminorgmsp.yaml \
+  --from-file=studentorgmsp.yaml=$PWD/studentorgmsp.yaml \
+  --from-file=orderermsp.yaml=$PWD/orderermsp.yaml \
+  --from-file=orderermspsign.yaml=$PWD/orderermspsign.yaml || true
+
+echo_info "✅ Wallet secret created"
+
+# ------------------------------------------------
+# Step 11: Create Main Channel
+# ------------------------------------------------
+echo ""
+echo_info "Step 11: Creating main channel..."
+
+ORDERER_TLS_CERT=$(kubectl get fabricorderernodes orderer0 -o=jsonpath='{.status.tlsCert}' | sed -e "s/^/        /")
+
+kubectl apply -f - <<EOF
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricMainChannel
+metadata:
+  name: demo
+spec:
+  name: demo
+  adminOrdererOrganizations:
+    - mspID: OrdererMSP
+  adminPeerOrganizations:
+    - mspID: AdminOrgMSP
+  channelConfig:
+    application:
+      capabilities:
+        - V2_0
+    capabilities:
+      - V2_0
+    orderer:
+      batchSize:
+        absoluteMaxBytes: 1048576
+        maxMessageCount: 10
+        preferredMaxBytes: 524288
+      batchTimeout: 2s
+      capabilities:
+        - V2_0
+      etcdRaft:
+        options:
+          electionTick: 10
+          heartbeatTick: 1
+          maxInflightBlocks: 5
+          snapshotIntervalSize: 16777216
+          tickInterval: 500ms
+      ordererType: etcdraft
+    state: STATE_NORMAL
+  peerOrganizations:
+    - mspID: AdminOrgMSP
+      caName: "ca-admin"
+      caNamespace: "default"
+    - mspID: StudentOrgMSP
+      caName: "ca-student"
+      caNamespace: "default"
+  identities:
+    OrdererMSP:
+      secretKey: orderermsp.yaml
+      secretName: wallet
+      secretNamespace: default
+    OrdererMSP-sign:
+      secretKey: orderermspsign.yaml
+      secretName: wallet
+      secretNamespace: default
+    AdminOrgMSP:
+      secretKey: adminorgmsp.yaml
+      secretName: wallet
+      secretNamespace: default
+  ordererOrganizations:
+    - caName: "ca-orderer"
+      caNamespace: "default"
+      externalOrderersToJoin:
+        - host: orderer0.default
+          port: 7053
+      mspID: OrdererMSP
+      ordererEndpoints:
+        - orderer0.localho.st:443
+      orderersToJoin: []
+      orderers:
+        - host: orderer0.localho.st
+          port: 443
+          tlsCert: |-
+${ORDERER_TLS_CERT}
+EOF
+
+echo_info "✅ Main channel created"
+
+# ------------------------------------------------
+# Step 12: Join Peers to Channel
+# ------------------------------------------------
+echo ""
+echo_info "Step 12: Joining peers to channel..."
+
+ORDERER_TLS_CERT=$(kubectl get fabricorderernodes orderer0 -o=jsonpath='{.status.tlsCert}' | sed -e "s/^/        /")
+
+# AdminOrg peer join
+kubectl apply -f - <<EOF
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricFollowerChannel
+metadata:
+  name: demo-adminorg
+spec:
+  anchorPeers:
+    - host: peer0-admin.localho.st
+      port: 443
+  hlfIdentity:
+    secretKey: adminorgmsp.yaml
+    secretName: wallet
+    secretNamespace: default
+  mspId: AdminOrgMSP
+  name: demo
+  externalPeersToJoin: []
+  orderers:
+    - certificate: |
+${ORDERER_TLS_CERT}
+      url: grpcs://orderer0.default:7050
+  peersToJoin:
+    - name: peer0-admin
+      namespace: default
+EOF
+
+# StudentOrg peer join
+kubectl apply -f - <<EOF
+apiVersion: hlf.kungfusoftware.es/v1alpha1
+kind: FabricFollowerChannel
+metadata:
+  name: demo-studentorg
+spec:
+  anchorPeers:
+    - host: peer0-student.localho.st
+      port: 443
+  hlfIdentity:
+    secretKey: studentorgmsp.yaml
+    secretName: wallet
+    secretNamespace: default
+  mspId: StudentOrgMSP
+  name: demo
+  externalPeersToJoin: []
+  orderers:
+    - certificate: |
+${ORDERER_TLS_CERT}
+      url: grpcs://orderer0.default:7050
+  peersToJoin:
+    - name: peer0-student
+      namespace: default
+EOF
+
+echo_info "✅ Peers joined to channel"
 
 # ------------------------------------------------
 # Summary
 # ------------------------------------------------
 echo ""
 echo "=============================================="
-echo "Deployment Status"
+echo "Deployment Complete!"
 echo "=============================================="
 echo ""
-echo "FabricCAs:"
-kubectl get fabriccas.hlf.kungfusoftware.es -n $NAMESPACE -o wide 2>/dev/null || true
+echo "Resources:"
+kubectl get fabriccas
 echo ""
-echo "FabricPeers:"
-kubectl get fabricpeers.hlf.kungfusoftware.es -n $NAMESPACE -o wide 2>/dev/null || true
+kubectl get fabricpeers
 echo ""
-echo "FabricOrderers:"
-kubectl get fabricorderingservices.hlf.kungfusoftware.es -n $NAMESPACE -o wide 2>/dev/null || true
+kubectl get fabricorderernodes
 echo ""
-echo "FabricMainChannel:"
-kubectl get fabricmainchannels.hlf.kungfusoftware.es -n $NAMESPACE -o wide 2>/dev/null || true
+kubectl get fabricmainchannels
 echo ""
-echo "FabricFollowerChannels:"
-kubectl get fabricfollowerchannels.hlf.kungfusoftware.es -n $NAMESPACE -o wide 2>/dev/null || true
+kubectl get fabricfollowerchannels
 echo ""
 echo "Pods:"
-kubectl get pods -n $NAMESPACE -o wide
+kubectl get pods
 echo ""
+echo "=============================================="
 echo "Next Steps:"
-echo "1. Wait for all pods to be Running"
-echo "2. Deploy chaincode"
-
+echo "1. Verify all pods are running: kubectl get pods"
+echo "2. Check channel status: kubectl get fabricfollowerchannels"
+echo "3. Deploy chaincode"
+echo "=============================================="

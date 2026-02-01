@@ -9,12 +9,11 @@ spec:
   dockerSocketPath: ""
   mspID: StudentOrgMSP
   hosts: []
-  operationHosts: []
-  operationIPs: []
   external_chaincode_builder: true
   externalEndpoint: ""
   istio:
     port: 443
+    ingressGateway: ingressgateway
   service:
     type: ClusterIP
   stateDb: couchdb
@@ -80,20 +79,16 @@ spec:
         cahost: ca-student.fabric-bevel.svc.cluster.local
         caname: ca
         caport: 7054
-        catls:
-          cacert: ""
-        enrollid: admin
-        enrollsecret: adminpw
+        enrollid: peer
+        enrollsecret: peerpw
       tls:
         cahost: ca-student.fabric-bevel.svc.cluster.local
         caname: tlsca
         caport: 7054
-        catls:
-          cacert: ""
         csr:
           cn: peer0-student
           hosts:
             - peer0-student
             - peer0-student.fabric-bevel.svc.cluster.local
-        enrollid: admin
-        enrollsecret: adminpw
+        enrollid: peer
+        enrollsecret: peerpw

@@ -1,124 +1,246 @@
-# Hyperledger Fabric - Bevel Operator Deployment
+# Hyperledger Fabric Network - Bevel Operator Deployment
 
-Production-ready Hyperledger Fabric network deployment using Bevel Operator on Kubernetes.
+Bu proje, Hyperledger Fabric ağını Kubernetes üzerinde Bevel Operator (HLF-Operator) kullanarak deploy eder.
 
-## Prerequisites
+## Ağ Yapısı
 
-- Kubernetes cluster (k3s, minikube, kind, etc.)
-- kubectl configured
-- Helm 3.x
-- Storage class available (default: `local-path`)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Hyperledger Fabric Network                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐        │
+│  │   ca-admin    │  │  ca-student   │  │  ca-orderer   │        │
+│  │  (AdminOrg)   │  │ (StudentOrg)  │  │  (Orderer)    │        │
+│  └───────────────┘  └───────────────┘  └───────────────┘        │
+│                                                                  │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐        │
+│  │  peer0-admin  │  │ peer0-student │  │   orderer0    │        │
+│  │  (AdminOrg)   │  │ (StudentOrg)  │  │  (Orderer)    │        │
+│  │  + CouchDB    │  │  + CouchDB    │  │               │        │
+│  └───────────────┘  └───────────────┘  └───────────────┘        │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────┐       │
+│  │                  Channel: demo                        │       │
+│  │   Members: AdminOrgMSP, StudentOrgMSP, OrdererMSP    │       │
+│  └──────────────────────────────────────────────────────┘       │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-## Quick Start
+## Ön Gereksinimler
 
+### 1. Kubernetes Cluster
+- K3D veya K3s cluster çalışıyor olmalı
+- `kubectl` ile erişim sağlanmış olmalı
+
+### 2. Helm v3
 ```bash
-# Make script executable
-chmod +x deploy.sh
+# Helm kurulumu (Linux)
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
 
-# Run deployment
+### 3. kubectl-hlf Plugin
+```bash
+# Önce Krew kur
+(
+  set -x; cd "$(mktemp -d)" &&
+  OS="$(uname | tr '[:upper:]' '[:lower:]')" &&
+  ARCH="$(uname -m | sed -e 's/x86_64/amd64/' -e 's/\(arm\)\(64\)\?.*/\1\2/' -e 's/aarch64$/arm64/')" &&
+  KREW="krew-${OS}_${ARCH}" &&
+  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
+  tar zxvf "${KREW}.tar.gz" &&
+  ./"${KREW}" install krew
+)
+
+# PATH'e ekle (.bashrc veya .zshrc'ye de ekle)
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+
+# hlf plugin kur
+kubectl krew install hlf
+
+# Doğrula
+kubectl hlf version
+```
+
+### 4. Istio
+```bash
+# Istio binary indir
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.23.3 sh -
+
+# PATH'e ekle
+export PATH="$PWD/istio-1.23.3/bin:$PATH"
+
+# Doğrula
+istioctl version
+```
+
+## Hızlı Başlangıç
+
+### 1. Mevcut kaynakları temizle (opsiyonel)
+```bash
+kubectl delete fabricfollowerchannels --all
+kubectl delete fabricmainchannels --all
+kubectl delete fabricorderernodes --all
+kubectl delete fabricpeers --all
+kubectl delete fabriccas --all
+kubectl delete secret wallet --ignore-not-found
+```
+
+### 2. Deploy script'i çalıştır
+```bash
+chmod +x deploy.sh
 ./deploy.sh
 ```
 
-The script will automatically:
-1. Install Helm (if missing)
-2. Install kubectl-hlf CLI plugin
-3. Deploy HLF Operator
-4. Create Certificate Authorities (OrdererOrg, AdminOrg, StudentOrg)
-5. Register identities
-6. Deploy Peers with CouchDB
-7. Deploy Orderer (Raft)
-8. Create and join channel
+## Manuel Deployment
 
-## Network Topology
+Eğer script yerine manuel deployment yapmak isterseniz, sırasıyla şu komutları çalıştırın:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Kubernetes                           │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │ ca-orderer  │  │  ca-admin   │  │ ca-student  │         │
-│  │   (CA)      │  │    (CA)     │  │    (CA)     │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
-│                                                             │
-│  ┌─────────────┐  ┌─────────────┐                          │
-│  │ peer0-admin │  │peer0-student│                          │
-│  │  (CouchDB)  │  │  (CouchDB)  │                          │
-│  └─────────────┘  └─────────────┘                          │
-│                                                             │
-│  ┌─────────────┐                                           │
-│  │   orderer   │   Channel: enrollchannel                  │
-│  │   (Raft)    │                                           │
-│  └─────────────┘                                           │
-└─────────────────────────────────────────────────────────────┘
+### 1. HLF Operator Kurulumu
+```bash
+helm repo add kfs https://kfsoftware.github.io/hlf-helm-charts --force-update
+helm install hlf-operator --version=1.13.0 kfs/hlf-operator
 ```
 
-## Organizations
+### 2. Istio Kurulumu
+```bash
+kubectl create namespace istio-system
+istioctl operator init
+kubectl apply -f istio-operator.yaml  # Aşağıdaki YAML'ı kullan
+```
 
-| Organization | MSP ID         | Components          |
-|-------------|----------------|---------------------|
-| OrdererOrg  | OrdererOrgMSP  | ca-orderer, orderer |
-| AdminOrg    | AdminOrgMSP    | ca-admin, peer0-admin |
-| StudentOrg  | StudentOrgMSP  | ca-student, peer0-student |
+### 3. CoreDNS Yapılandırması
+```bash
+kubectl apply -f coredns-config.yaml  # Aşağıdaki YAML'ı kullan
+kubectl rollout restart deployment coredns -n kube-system
+```
 
-## Chaincode Deployment
+### 4. CA'ları Oluştur
+```bash
+export CA_IMAGE=hyperledger/fabric-ca
+export CA_VERSION=1.5.6
+export SC_NAME=local-path
 
-After network deployment:
+kubectl hlf ca create --image=$CA_IMAGE --version=$CA_VERSION \
+  --storage-class=$SC_NAME --capacity=1Gi \
+  --name=ca-admin --enroll-id=enroll --enroll-pw=enrollpw \
+  --hosts=ca-admin.localho.st --istio-port=443
+
+kubectl hlf ca create --image=$CA_IMAGE --version=$CA_VERSION \
+  --storage-class=$SC_NAME --capacity=1Gi \
+  --name=ca-student --enroll-id=enroll --enroll-pw=enrollpw \
+  --hosts=ca-student.localho.st --istio-port=443
+
+kubectl hlf ca create --image=$CA_IMAGE --version=$CA_VERSION \
+  --storage-class=$SC_NAME --capacity=1Gi \
+  --name=ca-orderer --enroll-id=enroll --enroll-pw=enrollpw \
+  --hosts=ca-orderer.localho.st --istio-port=443
+
+kubectl wait --timeout=300s --for=condition=Running fabriccas --all
+```
+
+### 5. Identity Registration
+```bash
+kubectl hlf ca register --name=ca-admin --user=peer --secret=peerpw --type=peer \
+  --enroll-id enroll --enroll-secret=enrollpw --mspid AdminOrgMSP
+
+kubectl hlf ca register --name=ca-student --user=peer --secret=peerpw --type=peer \
+  --enroll-id enroll --enroll-secret=enrollpw --mspid StudentOrgMSP
+
+kubectl hlf ca register --name=ca-orderer --user=orderer --secret=ordererpw --type=orderer \
+  --enroll-id enroll --enroll-secret=enrollpw --mspid OrdererMSP
+```
+
+### 6. Peer ve Orderer Oluştur
+```bash
+export PEER_IMAGE=hyperledger/fabric-peer
+export PEER_VERSION=2.5.0
+export ORDERER_IMAGE=hyperledger/fabric-orderer
+export ORDERER_VERSION=2.5.0
+
+kubectl hlf peer create --statedb=couchdb --image=$PEER_IMAGE --version=$PEER_VERSION \
+  --storage-class=$SC_NAME --enroll-id=peer --mspid=AdminOrgMSP \
+  --enroll-pw=peerpw --capacity=5Gi --name=peer0-admin --ca-name=ca-admin.default \
+  --hosts=peer0-admin.localho.st --istio-port=443
+
+kubectl hlf peer create --statedb=couchdb --image=$PEER_IMAGE --version=$PEER_VERSION \
+  --storage-class=$SC_NAME --enroll-id=peer --mspid=StudentOrgMSP \
+  --enroll-pw=peerpw --capacity=5Gi --name=peer0-student --ca-name=ca-student.default \
+  --hosts=peer0-student.localho.st --istio-port=443
+
+kubectl hlf ordnode create --image=$ORDERER_IMAGE --version=$ORDERER_VERSION \
+  --storage-class=$SC_NAME --enroll-id=orderer --mspid=OrdererMSP \
+  --enroll-pw=ordererpw --capacity=2Gi --name=orderer0 --ca-name=ca-orderer.default \
+  --hosts=orderer0.localho.st --admin-hosts=admin-orderer0.localho.st --istio-port=443
+
+kubectl wait --timeout=300s --for=condition=Running fabricpeers --all
+kubectl wait --timeout=300s --for=condition=Running fabricorderernodes --all
+```
+
+## Doğrulama
 
 ```bash
-# 1. Package your chaincode
-kubectl hlf chaincode package --name=enrollment --version=1.0 --lang=golang --path=./chaincode
+# Tüm kaynakları listele
+kubectl get fabriccas
+kubectl get fabricpeers
+kubectl get fabricorderernodes
+kubectl get fabricmainchannels
+kubectl get fabricfollowerchannels
 
-# 2. Install on peers
-kubectl hlf chaincode install --peer=peer0-admin.fabric-bevel --package=enrollment-1.0.tar.gz
-kubectl hlf chaincode install --peer=peer0-student.fabric-bevel --package=enrollment-1.0.tar.gz
+# Pod durumlarını kontrol et
+kubectl get pods
 
-# 3. Approve and commit
-kubectl hlf chaincode approveformyorg --peer=peer0-admin.fabric-bevel --channel=enrollchannel --name=enrollment --version=1.0 --sequence=1
-kubectl hlf chaincode commit --peer=peer0-admin.fabric-bevel --channel=enrollchannel --name=enrollment --version=1.0 --sequence=1
+# Logları kontrol et
+kubectl logs -l app=ca-admin
+kubectl logs -l app=peer0-admin
 ```
 
-## External Chaincode
+## Sorun Giderme
 
-For external chaincode (running outside Kubernetes):
-
+### CA'lar başlamıyor
 ```bash
-kubectl apply -f 05-chaincode/chaincode-external.yaml
+kubectl describe fabricca ca-admin
+kubectl logs -l app=ca-admin
 ```
 
-## Useful Commands
-
+### Peer'lar FAILED durumunda
 ```bash
-# Check components
-kubectl get pods -n fabric-bevel
-kubectl get fabricca,fabricpeer,fabricorderingservice -n fabric-bevel
-
-# View CA logs
-kubectl logs -n fabric-bevel -l app=ca-admin
-
-# View peer logs
-kubectl logs -n fabric-bevel -l app=peer0-admin
-
-# Cleanup
-helm uninstall hlf-operator -n hlf-operator-system
-kubectl delete namespace fabric-bevel
+kubectl describe fabricpeer peer0-admin
+kubectl logs -l app=peer0-admin
 ```
 
-## Troubleshooting
-
-**Storage issues:**
+### x509 certificate error
+Bu hata genellikle Istio veya CoreDNS yapılandırmasının eksik olduğunu gösterir. CoreDNS config'inin uygulandığından ve Istio ingress gateway'in çalıştığından emin olun:
 ```bash
-# Check PVCs
-kubectl get pvc -n fabric-bevel
+kubectl get pods -n istio-system
+kubectl get pods -n kube-system | grep coredns
 ```
 
-**CA not ready:**
+## Temizlik
+
+Tüm kaynakları silmek için:
 ```bash
-# Check CA status
-kubectl describe fabricca ca-admin -n fabric-bevel
+# Fabric kaynakları
+kubectl delete fabricfollowerchannels --all
+kubectl delete fabricmainchannels --all
+kubectl delete fabricorderernodes --all
+kubectl delete fabricpeers --all
+kubectl delete fabriccas --all
+
+# Secret'lar
+kubectl delete secret wallet --ignore-not-found
+rm -f *.yaml
+
+# HLF Operator
+helm uninstall hlf-operator
+
+# Istio
+kubectl delete namespace istio-system
 ```
 
-**Peer enrollment failed:**
-```bash
-# Check if identity is registered
-kubectl hlf ca identity list --name=ca-admin --namespace=fabric-bevel
-```
+## Kaynaklar
+
+- [HLF-Operator GitHub](https://github.com/hyperledger-bevel/bevel-operator-fabric)
+- [HLF-Operator Documentation](https://hyperledger-bevel.readthedocs.io/)
+- [Hyperledger Fabric Documentation](https://hyperledger-fabric.readthedocs.io/)

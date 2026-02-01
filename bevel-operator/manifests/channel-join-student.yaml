@@ -15,8 +15,7 @@ spec:
   name: demo
   externalPeersToJoin: []
   orderers:
-    - certificate: ""
-      url: grpcs://orderer-orderer0.fabric-bevel.svc.cluster.local:7050
+    - url: grpcs://orderer-orderer0.fabric-bevel.svc.cluster.local:7050
   peersToJoin:
     - name: peer0-student
       namespace: fabric-bevel

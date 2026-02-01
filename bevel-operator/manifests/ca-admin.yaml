@@ -70,6 +70,12 @@ spec:
           name: admin
           pass: adminpw
           type: client
+        - affiliation: ''
+          attrs:
+            hf.Registrar.Roles: 'peer'
+          name: peer
+          pass: peerpw
+          type: peer
       max_enrollments: -1
     subject:
       C: TR
@@ -145,6 +151,12 @@ spec:
           name: admin
           pass: adminpw
           type: client
+        - affiliation: ''
+          attrs:
+            hf.Registrar.Roles: 'peer'
+          name: peer
+          pass: peerpw
+          type: peer
       max_enrollments: -1
     subject:
       C: TR
