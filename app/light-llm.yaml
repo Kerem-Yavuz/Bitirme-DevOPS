@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: light-llm
+  labels:
+    app: light-llm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: light-llm
+  template:
+    metadata:
+      labels:
+        app: light-llm
+    spec:
+      containers:
+      - name: llama-cpp-cpu
+        image: ghcr.io/ggerganov/llama.cpp:server
+        args: ["-m", "/models/light-model.gguf", "--host", "0.0.0.0", "--port", "8080"]
+        resources:
+          requests:
+            memory: "8Gi" # 8GB altı node'lara gitmemesi için request koyuyoruz (OS payı vb. düşünülerek)
+            cpu: "2"
+          limits:
+            memory: "12Gi"
+            cpu: "4"
+        volumeMounts:
+          - name: model-volume
+            mountPath: /models
+            readOnly: true
+      volumes:
+        - name: model-volume
+          hostPath:
+            path: /opt/llm-models # GGUF dosyasının host üzerindeki yeri
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: light-llm-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: light-llm
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+      nodePort: 31002 # İsteğe bağlı

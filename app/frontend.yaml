@@ -54,10 +54,11 @@ metadata:
   labels:
     app: bitirme-frontend
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: bitirme-frontend
   ports:
     - port: 80
       targetPort: 80
+      nodePort: 30080
       protocol: TCP
