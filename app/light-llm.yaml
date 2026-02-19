@@ -30,8 +30,11 @@ spec:
         storage: longhorn
       containers:
       - name: llama-cpp-cpu
-        image: ghcr.io/ggerganov/llama.cpp:server
-        args: ["-m", "/models/light-model.gguf", "--host", "0.0.0.0", "--port", "8080"]
+        image: ghcr.io/ggml-org/llama.cpp:server
+        args: ["-m", "/models/$(MODEL_NAME)", "--host", "0.0.0.0", "--port", "8080"]
+        env:
+          - name: MODEL_NAME
+            value: "light-model.gguf"
         resources:
           requests:
             memory: "8Gi"

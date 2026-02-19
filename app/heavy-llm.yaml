@@ -31,13 +31,14 @@ spec:
         storage: longhorn
       containers:
       - name: llama-cpp-gpu
-        image: ghcr.io/ggerganov/llama.cpp:server-cuda
-        # Model path is now relative to the mount point /models
-        args: ["-m", "/models/heavy-model.gguf", "--host", "0.0.0.0", "--port", "8080", "--n-gpu-layers", "99"]
+        image: ghcr.io/ggml-org/llama.cpp:server-cuda
+        args: ["-m", "/models/$(MODEL_NAME)", "--host", "0.0.0.0", "--port", "8080", "--n-gpu-layers", "99"]
         resources:
           limits:
             nvidia.com/gpu: 1
         env:
+          - name: MODEL_NAME
+            value: "heavy-model.gguf"
           - name: LD_LIBRARY_PATH
             value: "/nvidia-drivers"
         volumeMounts:

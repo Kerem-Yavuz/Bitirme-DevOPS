@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: model-uploader
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    storage: longhorn
+  containers:
+  - name: uploader
+    image: busybox
+    command: ["/bin/sh", "-c", "sleep 3600"]
+    volumeMounts:
+      - name: heavy-vol
+        mountPath: /heavy-models
+      - name: light-vol
+        mountPath: /light-models
+  volumes:
+    - name: heavy-vol
+      persistentVolumeClaim:
+        claimName: heavy-model-claim
+    - name: light-vol
+      persistentVolumeClaim:
+        claimName: light-model-claim
